@@ -248,7 +248,7 @@ git commit -m "feat: register documented Ponte MCP tools"
 - Produces `UrllibTransport`，使用 `urllib.request`，只接受 `RestRequest`。
 - Produces `RestAdapter(base_url: str, transport: HttpTransport, timeout: float = 10.0)` 及 `RestAdapter.invoke(definition: ToolDefinition, arguments: Mapping[str, Any]) -> dict[str, Any]`。
 
-- [ ] **Step 1: 寫 failing tests**
+- [x] **Step 1: 寫 failing tests**
 
 ```python
 # MCP/tests/test_rest_adapter.py
@@ -333,25 +333,25 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: 執行測試確認失敗**
+- [x] **Step 2: 執行測試確認失敗**
 
 Run: `python3 -m unittest MCP.tests.test_rest_adapter -v`
 
 Expected: FAIL，因為 `MCP.rest_adapter` 尚未存在。
 
-- [ ] **Step 3: 寫最小實作**
+- [x] **Step 3: 寫最小實作**
 
 `RestAdapter.invoke` 必須先用 `ToolContext.from_arguments` 驗證 envelope，再由 `ToolDefinition` 產生 path、query、body 和 headers。query 只取 definition 的 `query_fields`；list/boolean 使用 API 文件的逗號分隔／`true`、`false` 格式；path ID 使用 `urllib.parse.quote(..., safe="")`。POST body 必須等於 `arguments["input"]`，不得把 context 混入 body。base URL 只能來自 constructor 或 `PONTE_BACKEND_URL`，以 `base_url.rstrip("/") + path` 組合。
 
 `UrllibTransport` 必須設定 `Accept: application/json`，POST 設定 `Content-Type: application/json`，以 `HTTPError` 讀取 backend error body；connection refused 映射 `BACKEND_UNAVAILABLE`，socket timeout 映射 `BACKEND_TIMEOUT`，非 JSON success body 映射 `BACKEND_INVALID_RESPONSE`。HTTP 4xx/5xx 仍保留 status、後端 error code、message、details 和 retryable。
 
-- [ ] **Step 4: 執行測試確認通過**
+- [x] **Step 4: 執行測試確認通過**
 
 Run: `python3 -m unittest MCP.tests.test_rest_adapter -v`
 
 Expected: 3 tests PASS，且測試不會發出真實網絡請求。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add MCP/models.py MCP/errors.py MCP/rest_adapter.py MCP/tests/test_rest_adapter.py

@@ -101,6 +101,8 @@ class ToolDefinition:
                 raise ValueError(f"Unsupported route selector: {self.route_selector}")
             template = self.route_variants[selector]
         for placeholder, input_key in self.path_params.items():
+            if "{" + placeholder + "}" not in template:
+                continue
             value = input_data.get(input_key)
             if value is None:
                 raise ValueError(f"Missing path field: {input_key}")
