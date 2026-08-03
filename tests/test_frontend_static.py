@@ -48,6 +48,12 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertRegex(css, r"min-height:\s*56px")
         self.assertIn(":focus-visible", css)
 
+    def test_view_module_exports_renderer(self):
+        js = Path("frontend/interaction-view.js").read_text(encoding="utf-8")
+        self.assertIn("createInteractionView", js)
+        self.assertIn("tool_events", js)
+        self.assertIn("actions", js)
+
 
 if __name__ == "__main__":
     unittest.main()
