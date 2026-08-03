@@ -201,7 +201,7 @@ git commit -m "feat: add middleware interaction contracts"
 - Produces `DirectMcpExecutionStage(registry: ToolRegistry, adapter: RestAdapter)`.
 - Consumes `MCP.registry.ToolRegistry`, `MCP.rest_adapter.RestAdapter` and `MCP.errors.AdapterError`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 import unittest
@@ -253,13 +253,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python3 -m unittest middleware.tests.test_execution -v`
 
 Expected: FAIL because `middleware.execution` and the pipeline classes do not exist.
 
-- [ ] **Step 3: Implement pipeline composition and adapter error conversion**
+- [x] **Step 3: Implement pipeline composition and adapter error conversion**
 
 Implement the pipeline as nested `next_stage` calls so a future Workflow Orchestrator can be inserted without changing the controller:
 
@@ -280,13 +280,13 @@ class ExecutionPipeline:
 
 `DirectMcpExecutionStage` looks up the fixed registry definition and invokes the existing adapter. Convert `AdapterError` into `ToolExecutionResult(ok=False, error=error.to_dict())`; do not include tracebacks. Pull `request_id` from successful payload `request_id`, or generate a safe `REQ-MW-*` value when the adapter error has no request ID.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `python3 -m unittest middleware.tests.test_execution MCP.tests.test_rest_adapter -v`
 
 Expected: all pipeline tests and all existing adapter tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add middleware/execution.py middleware/tests/test_execution.py
