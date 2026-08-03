@@ -79,7 +79,7 @@ POST /api/interactions/action
 - Produces `MiddlewareError` with `status`, `code`, `message` and `details`.
 - Static server serves only files below `frontend/` and returns 404 for path traversal or missing files.
 
-- [ ] **Step 1: Write the failing static-server and client contract checks**
+- [x] **Step 1: Write the failing static-server and client contract checks**
 
 ```python
 import json
@@ -118,13 +118,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run the check to verify it fails**
+- [x] **Step 2: Run the check to verify it fails**
 
 Run: `python3 -m unittest tests.test_frontend_static -v`
 
 Expected: FAIL because `frontend/server.py`, `frontend/index.html` and `frontend/mcp-client.js` do not exist.
 
-- [ ] **Step 3: Implement a safe static server and middleware-only client**
+- [x] **Step 3: Implement a safe static server and middleware-only client**
 
 Use `SimpleHTTPRequestHandler` with a resolved `frontend/` root and reject any resolved path outside that root. Keep the server independent from the middleware process so frontend and middleware can be started and tested separately.
 
@@ -173,7 +173,7 @@ export class MiddlewareClient {
 
 The client must parse non-JSON responses into a safe `MIDDLEWARE_INVALID_RESPONSE` error and never expose raw response HTML to the UI.
 
-- [ ] **Step 4: Run the checks to verify they pass**
+- [x] **Step 4: Run the checks to verify they pass**
 
 Run: `python3 -m unittest tests.test_frontend_static -v`
 
@@ -183,7 +183,7 @@ Run: `node --check frontend/mcp-client.js`
 
 Expected: exit code 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/server.py frontend/mcp-client.js tests/test_frontend_static.py
@@ -201,7 +201,7 @@ git commit -m "feat: add Ponte frontend server and middleware client"
 - Produces stable element IDs used by `app.js`: `health-status`, `conversation-list`, `message-form`, `message-input`, `mic-button`, `speak-stop-button`, `task-steps`, `task-content`, `action-list`, `global-error`.
 - Produces accessible labels and keyboard focus states without requiring JavaScript to understand the business domain.
 
-- [ ] **Step 1: Write the failing asset and accessibility checks**
+- [x] **Step 1: Write the failing asset and accessibility checks**
 
 Extend `tests/test_frontend_static.py`:
 
@@ -224,13 +224,13 @@ def test_styles_define_large_controls_and_focus(self):
     self.assertIn(":focus-visible", css)
 ```
 
-- [ ] **Step 2: Run the checks to verify they fail**
+- [x] **Step 2: Run the checks to verify they fail**
 
 Run: `python3 -m unittest tests.test_frontend_static.FrontendStaticTests.test_index_has_required_landmarks_and_controls tests.test_frontend_static.FrontendStaticTests.test_styles_define_large_controls_and_focus -v`
 
 Expected: FAIL because the HTML and CSS assets are not implemented.
 
-- [ ] **Step 3: Implement the semantic shell and CSS**
+- [x] **Step 3: Implement the semantic shell and CSS**
 
 Create a two-column desktop layout and a stacked mobile layout:
 
@@ -259,13 +259,13 @@ Create a two-column desktop layout and a stacked mobile layout:
 
 Use no decorative gradients or dense navigation. Provide large readable cards for appointment/service/slot data, visible labels for risk and confirmation, sticky action controls on mobile, and an always-visible global error region with `role="alert"`. Use `:focus-visible`, `prefers-reduced-motion`, CSS custom properties for high-contrast colors, and text labels alongside icons.
 
-- [ ] **Step 4: Run the checks to verify they pass**
+- [x] **Step 4: Run the checks to verify they pass**
 
 Run: `python3 -m unittest tests.test_frontend_static -v`
 
 Expected: all asset and accessibility checks PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/index.html frontend/styles.css tests/test_frontend_static.py
@@ -283,7 +283,7 @@ git commit -m "feat: add elder-friendly Ponte interface shell"
 - Produces `renderResponse(response)`, `renderHealth(payload)`, `renderError(error)` and `clearError()`.
 - Consumes only the middleware response contract; it never calls `fetch` or interprets tool names as backend URLs.
 
-- [ ] **Step 1: Write the failing static contract check**
+- [x] **Step 1: Write the failing static contract check**
 
 Extend `tests/test_frontend_static.py`:
 
@@ -295,13 +295,13 @@ def test_view_module_exports_renderer(self):
     self.assertIn("actions", js)
 ```
 
-- [ ] **Step 2: Run the check to verify it fails**
+- [x] **Step 2: Run the check to verify it fails**
 
 Run: `python3 -m unittest tests.test_frontend_static.FrontendStaticTests.test_view_module_exports_renderer -v`
 
 Expected: FAIL because the view module does not exist.
 
-- [ ] **Step 3: Implement safe, response-driven rendering**
+- [x] **Step 3: Implement safe, response-driven rendering**
 
 Render all server-provided text through `textContent`, never `innerHTML` with untrusted response values. The view must:
 
@@ -315,7 +315,7 @@ Render all server-provided text through `textContent`, never `innerHTML` with un
 
 Use an explicit `formatValue(value)` helper that handles strings, numbers, booleans, arrays and objects without leaking `[object Object]`. Display dates in `zh-HK` only when the value is a valid ISO date; retain the raw value in a visually secondary diagnostic line when formatting fails.
 
-- [ ] **Step 4: Run syntax and static checks**
+- [x] **Step 4: Run syntax and static checks**
 
 Run: `node --check frontend/interaction-view.js`
 
@@ -325,7 +325,7 @@ Run: `python3 -m unittest tests.test_frontend_static -v`
 
 Expected: all frontend static checks PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/interaction-view.js frontend/index.html tests/test_frontend_static.py
@@ -345,7 +345,7 @@ git commit -m "feat: render Ponte conversation and task state"
 - `start()`, `stop()`, `speak(text)`, `stopSpeaking()` are safe no-op or stateful operations.
 - Recognition language is `zh-HK`; transcript callbacks include `{text, isFinal}`.
 
-- [ ] **Step 1: Write the failing static checks**
+- [x] **Step 1: Write the failing static checks**
 
 Extend `tests/test_frontend_static.py`:
 
@@ -358,13 +358,13 @@ def test_speech_module_has_fallback_and_cantonese_locale(self):
     self.assertIn("speechSynthesis", js)
 ```
 
-- [ ] **Step 2: Run the check to verify it fails**
+- [x] **Step 2: Run the check to verify it fails**
 
 Run: `python3 -m unittest tests.test_frontend_static.FrontendStaticTests.test_speech_module_has_fallback_and_cantonese_locale -v`
 
 Expected: FAIL because `frontend/speech.js` does not exist.
 
-- [ ] **Step 3: Implement feature detection and editable transcript behavior**
+- [x] **Step 3: Implement feature detection and editable transcript behavior**
 
 Use the browser implementation when available and report `unsupported` otherwise:
 
@@ -398,7 +398,7 @@ export function createSpeechController({ onTranscript, onStateChange }) {
 
 Do not auto-submit final transcripts. `app.js` writes them into `message-input`, and the user presses `送出`. Automatically speak only the assistant message after a user-initiated interaction; catch speech synthesis failures and leave text output intact.
 
-- [ ] **Step 4: Run syntax and static checks**
+- [x] **Step 4: Run syntax and static checks**
 
 Run: `node --check frontend/speech.js`
 
@@ -408,7 +408,7 @@ Run: `python3 -m unittest tests.test_frontend_static -v`
 
 Expected: all speech fallback checks PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/speech.js frontend/index.html frontend/styles.css tests/test_frontend_static.py
@@ -427,7 +427,7 @@ git commit -m "feat: add optional Cantonese speech interaction"
 - Sends `{session_id, message, source}` for text or voice transcripts.
 - Sends `{session_id, action, payload}` for every middleware action button.
 
-- [ ] **Step 1: Write the failing static wiring checks**
+- [x] **Step 1: Write the failing static wiring checks**
 
 Extend `tests/test_frontend_static.py`:
 
@@ -438,13 +438,13 @@ def test_app_wires_client_view_and_speech(self):
         self.assertIn(token, js)
 ```
 
-- [ ] **Step 2: Run the check to verify it fails**
+- [x] **Step 2: Run the check to verify it fails**
 
 Run: `python3 -m unittest tests.test_frontend_static.FrontendStaticTests.test_app_wires_client_view_and_speech -v`
 
 Expected: FAIL because `frontend/app.js` does not exist.
 
-- [ ] **Step 3: Implement event wiring and resilient request state**
+- [x] **Step 3: Implement event wiring and resilient request state**
 
 On startup:
 
@@ -459,7 +459,7 @@ On startup:
 
 Disable only the submit control while a request is pending. Keep cancel and stop controls available. On `MiddlewareError`, call `view.renderError` with its safe message and leave the last valid task state on screen. Do not catch errors by replacing the entire page with a generic failure message.
 
-- [ ] **Step 4: Run syntax and static checks**
+- [x] **Step 4: Run syntax and static checks**
 
 Run: `node --check frontend/app.js && node --check frontend/mcp-client.js && node --check frontend/interaction-view.js && node --check frontend/speech.js`
 
@@ -469,7 +469,7 @@ Run: `python3 -m unittest tests.test_frontend_static -v`
 
 Expected: all frontend wiring checks PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/app.js frontend/index.html tests/test_frontend_static.py
@@ -486,7 +486,7 @@ git commit -m "feat: connect Ponte frontend to middleware"
 - Documents `PONTE_MIDDLEWARE_URL` and the separate frontend/middleware startup commands.
 - Provides a repeatable browser smoke checklist for text, voice fallback, tool events and confirmation actions.
 
-- [ ] **Step 1: Add the runbook**
+- [x] **Step 1: Add the runbook**
 
 Document this exact local setup:
 
@@ -504,7 +504,7 @@ window.PONTE_MIDDLEWARE_URL = "http://127.0.0.1:8090";
 
 The default already points to `http://127.0.0.1:8090`; the config exists so a future deployed middleware URL can be selected without changing application logic.
 
-- [ ] **Step 2: Run automated frontend verification**
+- [x] **Step 2: Run automated frontend verification**
 
 Run: `python3 -m unittest tests.test_frontend_static -v`
 
@@ -528,7 +528,7 @@ With all three local processes running, verify:
 8. In a browser without speech recognition, the microphone control explains that text input remains available.
 9. Backend shutdown produces a readable error and keeps the text form usable.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/README.md tests/test_frontend_static.py
