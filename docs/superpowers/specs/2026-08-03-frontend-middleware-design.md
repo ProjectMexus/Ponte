@@ -165,7 +165,7 @@ For a formal appointment submission, the middleware supplies:
 - `patient_id` and mock authorization context;
 - a unique `request_id`;
 - an idempotency key tied to session and submission step;
-- `confirmation: true` and `consent: true` in the backend input body.
+- `consent: true` in the documented backend input body; the middleware keeps the explicit confirmation decision in its own task event and only calls the backend after that decision.
 
 The middleware only reports submission success after the adapter receives a successful backend response.
 
