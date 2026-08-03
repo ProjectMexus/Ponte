@@ -625,7 +625,7 @@ git commit -m "test: verify middleware reaches mock medical backend"
 - Documents `PONTE_BACKEND_URL`, `PONTE_FRONTEND_ORIGINS`, `PONTE_PATIENT_ID` and `PONTE_AUTHORIZATION`.
 - Documents the JSON bodies for `/api/interactions/message`, `/api/interactions/action` and `/api/mcp/tools/call`.
 
-- [ ] **Step 1: Write the runbook**
+- [x] **Step 1: Write the runbook**
 
 Include the exact local sequence:
 
@@ -637,11 +637,11 @@ curl http://127.0.0.1:8090/api/health
 
 Explain that `backend_reachable` is checked through the medical catalog call, that the session store is in memory, and that formal creation requires an explicit middleware action `confirm`.
 
-- [ ] **Step 2: Verify the documented commands against the implementation**
+- [x] **Step 2: Verify the documented commands against the implementation**
 
 Run the two servers with temporary data, call `/api/health`, `/api/mcp/tools`, and one `/api/interactions/message`, then stop both processes and confirm no repository data directory was created.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add middleware/README.md
