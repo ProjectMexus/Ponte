@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 from .errors import (
     AdapterError,
@@ -40,6 +40,9 @@ class UrllibTransport:
 
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
+        # Mock backends are addressed directly; environment proxies must not
+        # intercept local fixture or Ponte backend requests.
+        self.opener = build_opener(ProxyHandler({}))
 
     def request(self, request: RestRequest, timeout: float) -> HttpResponse:
         query = urlencode(list(request.query.items()))
@@ -53,7 +56,7 @@ class UrllibTransport:
             data = json.dumps(request.body, ensure_ascii=False).encode("utf-8")
         http_request = Request(url, data=data, headers=headers, method=request.method)
         try:
-            with urlopen(http_request, timeout=timeout) as response:
+            with self.opener.open(http_request, timeout=timeout) as response:
                 return HttpResponse(
                     status=response.status,
                     headers=dict(response.headers.items()),

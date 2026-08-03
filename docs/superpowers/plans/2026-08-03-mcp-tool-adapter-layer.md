@@ -457,7 +457,7 @@ git commit -m "feat: expose Ponte tools over MCP stdio"
 - Produces `FixtureBackend` 對文件中的 GET/POST path 返回可解析的 `request_id`／`data` success envelope，並能用指定 path 返回 `409` error envelope。
 - Produces subprocess smoke test，證明 MCP stdio → REST adapter → fixture HTTP backend → MCP response 的完整鏈路。
 
-- [ ] **Step 1: 寫 failing smoke test**
+- [x] **Step 1: 寫 failing smoke test**
 
 ```python
 # MCP/tests/test_smoke.py
@@ -530,23 +530,23 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: 執行測試確認失敗**
+- [x] **Step 2: 執行測試確認失敗**
 
 Run: `python3 -m unittest MCP.tests.test_smoke -v`
 
 Expected: FAIL，因為 fixture backend 和 MCP subprocess 尚未存在。
 
-- [ ] **Step 3: 寫 fixture 與補齊錯誤案例**
+- [x] **Step 3: 寫 fixture 與補齊錯誤案例**
 
 以 `ThreadingHTTPServer` 綁定 `127.0.0.1` 的 ephemeral port。handler 將每個 request 記錄為 method、path、query、headers、JSON body；對 `GET /mock/medical/v1/departments` 返回 `200`，對上述活動 POST 返回 `201`，對 `POST /mock/medical/v1/registrations` 且 body 的 `slot_id` 為 `SLOT-CONFLICT` 返回 `409`，其他文件 path 返回 `200` 空 data。另加測試：backend 返回 409 時 MCP result 為 `isError=true` 且保留 `SLOT_NOT_AVAILABLE`，停止 fixture backend 後 call 返回 `BACKEND_UNAVAILABLE`，REST transport 收到非 object JSON 時返回 `BACKEND_INVALID_RESPONSE`。
 
-- [ ] **Step 4: 執行完整測試確認通過**
+- [x] **Step 4: 執行完整測試確認通過**
 
 Run: `python3 -m unittest discover -s MCP/tests -v`
 
 Expected: 所有 model、registry、REST adapter、server 及 smoke tests PASS，且 subprocess 在測試結束後已關閉。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add MCP/tests/fixture_backend.py MCP/tests/test_smoke.py
