@@ -430,7 +430,7 @@ git commit -m "feat: add deterministic Ponte interaction controller"
 - Provides `GET /api/health`, `GET /api/mcp/tools`, `POST /api/mcp/tools/call`, `POST /api/interactions/message` and `POST /api/interactions/action`.
 - Provides `main()` for `python3 -m middleware.server --host 127.0.0.1 --port 8090`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 import json
@@ -480,13 +480,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python3 -m unittest middleware.tests.test_server -v`
 
 Expected: FAIL because the HTTP application and routes are not implemented.
 
-- [ ] **Step 3: Implement route handling and CORS**
+- [x] **Step 3: Implement route handling and CORS**
 
 Build a `MiddlewareApplication` with one shared registry, `RestAdapter.from_environment`-compatible base URL, `ExecutionPipeline([DirectMcpExecutionStage(...)])`, `SessionStore` and `InteractionController`.
 
@@ -514,13 +514,13 @@ For `/api/health`, perform a lightweight `medical.list_departments` call with th
 
 Use HTTP 400 for malformed JSON, missing required fields and invalid actions; HTTP 404 for unknown paths; HTTP 405 for unsupported methods. Add `Access-Control-Allow-Origin` from the configured allowlist, `Access-Control-Allow-Headers: Content-Type`, and an `OPTIONS` response so the separate static frontend can call the bridge.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `python3 -m unittest middleware.tests.test_server -v`
 
 Expected: all bridge routing, JSON error and catalog tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add middleware/server.py middleware/tests/test_server.py
