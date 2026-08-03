@@ -2,6 +2,7 @@ import unittest
 
 from middleware.contracts import InteractionActionRequest, InteractionRequest, ToolExecutionResult
 from middleware.controller import InteractionController
+from middleware.intent import IntentDecision, IntentRecognizer
 from middleware.session import SessionStore
 
 
@@ -24,6 +25,11 @@ class RecordingPipeline:
         raise AssertionError(call.name)
 
 
+class AlwaysGeneralRecognizer(IntentRecognizer):
+    def recognize(self, message):
+        return IntentDecision("general", "llm", 0.99)
+
+
 class ControllerTests(unittest.TestCase):
     def setUp(self):
         self.pipeline = RecordingPipeline()
@@ -36,6 +42,19 @@ class ControllerTests(unittest.TestCase):
             "medical.get_my_appointments",
             "medical.list_appointment_services",
         ])
+
+    def test_controller_uses_injected_intent_recognizer(self):
+        controller = InteractionController(
+            self.pipeline,
+            SessionStore(),
+            "PAT-DEMO-001",
+            "Bearer mock-user-token",
+            intent_recognizer=AlwaysGeneralRecognizer(),
+        )
+        response = controller.handle_message(InteractionRequest("S-2", "我想預約醫療服務"))
+        self.assertEqual(response["task_state"], "idle")
+        self.assertEqual(response["data"]["intent_source"], "llm")
+        self.assertEqual(self.pipeline.calls, [])
 
     def test_create_appointment_is_blocked_until_confirmation(self):
         self.controller.handle_message(InteractionRequest("S-1", "我想預約醫療服務"))

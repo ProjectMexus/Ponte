@@ -10,10 +10,10 @@ from typing import Any
 
 from .contracts import InteractionActionRequest, InteractionRequest, ToolCall, ToolExecutionResult
 from .execution import ExecutionPipeline
+from .intent import IntentRecognizer, KeywordIntentRecognizer, build_intent_recognizer
 from .session import SessionState, SessionStore, build_response
 
 
-_MEDICAL_INTENT_TERMS = ("醫療", "預約", "覆診", "睇醫生", "改期")
 _ACTION_NAMES = frozenset({"search_slots", "select_slot", "confirm", "cancel", "retry", "human_help"})
 _MISSING = object()
 
@@ -27,11 +27,13 @@ class InteractionController:
         sessions: SessionStore,
         patient_id: str,
         authorization: str,
+        intent_recognizer: IntentRecognizer | None = None,
     ) -> None:
         self.pipeline = pipeline
         self.sessions = sessions
         self.patient_id = _required_string(patient_id, "patient_id")
         self.authorization = _required_string(authorization, "authorization")
+        self.intent_recognizer = intent_recognizer or build_intent_recognizer()
 
     def handle_message(self, request: InteractionRequest) -> dict[str, Any]:
         if not isinstance(request, InteractionRequest):
@@ -39,7 +41,10 @@ class InteractionController:
         state = self.sessions.get_or_create(request.session_id)
         state.last_error = None
 
-        if not _is_medical_intent(request.message):
+        intent = self.intent_recognizer.recognize(request.message)
+        state.data["intent"] = intent.intent
+        state.data["intent_source"] = intent.source
+        if not intent.is_medical:
             state.task_state = "idle"
             state.current_step = "welcome"
             return build_response(
@@ -369,7 +374,9 @@ def _payload_string(payload: Mapping[str, Any], field_name: str) -> str:
 
 
 def _is_medical_intent(message: str) -> bool:
-    return any(term in message for term in _MEDICAL_INTENT_TERMS)
+    """Backward-compatible deterministic helper for callers outside the controller."""
+
+    return KeywordIntentRecognizer().recognize(message).is_medical
 
 
 def _request_id() -> str:

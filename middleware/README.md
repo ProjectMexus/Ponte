@@ -24,6 +24,8 @@ curl http://127.0.0.1:8090/api/health
 
 `/api/health` 會實際呼叫 `medical.list_departments`；bridge 本身仍然運作但 backend 未啟動時，HTTP 仍回 200，`backend_reachable` 會是 `false`。session state 只保存在記憶體，middleware 重啟後會遺失。
 
+Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_URL`，middleware 會優先使用 OpenAI-compatible chat-completions API；LLM 未設定、回應格式錯誤或網絡呼叫失敗時，會自動 fallback 到 keyword recognizer。
+
 ## 環境設定
 
 | 變數 | 預設值 | 用途 |
@@ -32,6 +34,9 @@ curl http://127.0.0.1:8090/api/health
 | `PONTE_FRONTEND_ORIGINS` | `http://127.0.0.1:5173,http://localhost:5173` | 逗號分隔的 CORS origin allowlist。 |
 | `PONTE_PATIENT_ID` | `PAT-DEMO-001` | Interaction Controller 使用的 mock patient context。 |
 | `PONTE_AUTHORIZATION` | `Bearer mock-user-token` | Interaction Controller 使用的 mock authorization context。 |
+| `PONTE_LLM_API_URL` | 空值 | LLM intent endpoint，例如 `https://api.example.com/v1/chat/completions`；未設定時只使用 keyword。 |
+| `PONTE_LLM_API_KEY` | 空值 | LLM API bearer token；不要寫入 repository。 |
+| `PONTE_LLM_MODEL` | `gpt-4o-mini` | LLM 使用的 model 名稱。 |
 
 ## HTTP API
 
