@@ -6,23 +6,21 @@ from mock_backends.core.http import BackendRequest
 from mock_backends.core.idempotency import RepositoryIdempotencyStore
 from mock_backends.core.ids import SequentialIdGenerator
 from mock_backends.core.persistence import MemoryRepository
-from mock_backends.one_account.backend import OneAccountBackend
-from mock_backends.one_account.service import OneAccountService
+from mock_backends.social_welfare.activity_backend import ElderlyActivitiesBackend
+from mock_backends.social_welfare.activity_service import ElderlyActivitiesService
 
 
 class ActivityBackendTests(unittest.TestCase):
     def setUp(self):
         clock = FixedClock(datetime(2026, 8, 3, 9, 0, tzinfo=MACAU_TZ))
-        self.service = OneAccountService(
+        self.service = ElderlyActivitiesService(
             clock=clock,
             ids=SequentialIdGenerator(),
-            application_repository=MemoryRepository(),
-            ticket_repository=MemoryRepository(),
             idempotency=RepositoryIdempotencyStore(MemoryRepository()),
-            activity_registration_repository=MemoryRepository(),
+            registration_repository=MemoryRepository(),
             phone_assistance_repository=MemoryRepository(),
         )
-        self.backend = OneAccountBackend(self.service)
+        self.backend = ElderlyActivitiesBackend(self.service)
 
     def request(self, method, path, user="USR-DEMO-001", body=None, query=None, **headers):
         all_headers = {"X-Mock-User-Id": user} if user is not None else {}
@@ -158,3 +156,4 @@ class ActivityBackendTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

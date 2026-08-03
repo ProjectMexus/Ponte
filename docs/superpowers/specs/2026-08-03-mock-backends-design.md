@@ -4,9 +4,9 @@
 
 根據 `docs/PonteArch.md` 及 `docs/api/` 建立三個可獨立理解、可獨立測試及可替換實作的 mock domain backend：
 
-1. 一戶通 backend，包括文件中的公共服務及長者文娛活動能力。
+1. 一戶通 backend，包括文件中的公共服務能力。
 2. 醫療 backend，包括 FHIR-inspired 醫療行政預約能力。
-3. 社會福利 backend，包括 Arch 文件所描述的服務搜尋及轉介流程。
+3. 社會福利 backend，包括 Arch 文件所描述的服務搜尋、轉介流程及長者文娛活動能力。
 
 這些 backend 只服務本地 Ponte Demo，不連接真實政府、醫療或社福系統，不提供真實身份驗證、醫療判斷、付款或電話撥出。
 
@@ -22,7 +22,9 @@
 - `POST /mock/one-account/queue-tickets/identification-services-bureau`
 - `GET /mock/one-account/my/queue-tickets`
 
-同一 domain 另外實作 `docs/api/elderly-cultural-activities-api.md`：
+### 社會福利 domain 內的長者文娛活動
+
+長者文娛活動 API 使用獨立的 activity service/backend，但按 domain 歸屬放在 social_welfare 資料夾。它實作 `docs/api/elderly-cultural-activities-api.md`：
 
 - `GET /mock/elderly-activities/v1/activities`
 - `GET /mock/elderly-activities/v1/activities/{activityId}`
@@ -53,14 +55,14 @@
 
 ### 社會福利
 
-`PonteArch.md` 沒有對應的 `docs/api` 文件，因此社福 backend 使用 Arch-derived demo contract，並在程式碼與 README 中標示其來源。實作以下 endpoint：
+`PonteArch.md` 沒有對應的 `docs/api` 文件，因此社福 referral backend 使用 Arch-derived demo contract，並在程式碼與 README 中標示其來源。實作以下 referral endpoint：
 
 - `GET /mock/social-welfare/services`
 - `POST /mock/social-welfare/referrals`
 - `GET /mock/social-welfare/referrals/{referralId}`
 - `POST /mock/social-welfare/referrals/{referralId}/assign`
 
-資料模型對應 Arch 的 `WelfareService`、`Referral`、`CaseWorker` 和 `ReferralStatus`。建立轉介要求 `X-Mock-User-Id`、資料共享同意及長者明確確認；assign 只模擬社工接手，不發送真實通知。
+資料模型對應 Arch 的 `WelfareService`、`Referral`、`CaseWorker` 和 `ReferralStatus`。建立轉介要求 `X-Mock-User-Id`、資料共享同意及長者明確確認；assign 只模擬社工接手，不發送真實通知。活動與 referral 共屬 social_welfare domain，但使用不同 service、fixture、repository 和 API mount。
 
 ## 架構
 
@@ -69,7 +71,8 @@ HTTP server / router
         │
         ├── OneAccountHttpAdapter ── OneAccountService ── Repository interfaces
         ├── MedicalHttpAdapter    ── MedicalService    ── Repository interfaces
-        └── SocialWelfareAdapter  ── SocialWelfareService ─ Repository interfaces
+        ├── SocialWelfareAdapter  ── SocialWelfareService ─ Repository interfaces
+        └── ElderlyActivitiesAdapter ── ElderlyActivitiesService ─ Repository interfaces
                                       │
                                       └── Text-file repository implementation
 ```
@@ -97,8 +100,6 @@ data/mock/
 ├── one_account/
 │   ├── applications.txt
 │   ├── queue_tickets.txt
-│   ├── activity_registrations.txt
-│   ├── phone_registration_assists.txt
 │   └── idempotency.txt
 ├── medical/
 │   ├── appointments.txt
@@ -106,7 +107,10 @@ data/mock/
 │   └── idempotency.txt
 └── social_welfare/
     ├── referrals.txt
-    └── idempotency.txt
+    ├── idempotency.txt
+    ├── activity_registrations.txt
+    ├── phone_registration_assists.txt
+    └── activity_idempotency.txt
 ```
 
 Fixture、科室、活動和服務目錄屬於程式碼內的只讀 demo data；使用者建立的狀態才寫入上述 `.txt` 文件。啟動參數可覆寫資料根目錄，測試使用 temporary directory。
