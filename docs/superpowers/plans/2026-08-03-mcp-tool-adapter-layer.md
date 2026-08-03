@@ -39,7 +39,7 @@
 - Produces `RestRequest(method: str, path: str, query: Mapping[str, str], body: Mapping[str, Any] | None, headers: Mapping[str, str])`。
 - Produces `AdapterError(code: str, message: str, status: int | None, details: Any, retryable: bool)` 及 `InvalidToolArguments`、`BackendUnavailable`、`BackendTimeout`、`BackendInvalidResponse` 子類。
 
-- [ ] **Step 1: 寫 failing tests**
+- [x] **Step 1: 寫 failing tests**
 
 ```python
 # MCP/tests/test_models.py
@@ -89,13 +89,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: 執行測試確認失敗**
+- [x] **Step 2: 執行測試確認失敗**
 
 Run: `python3 -m unittest MCP.tests.test_models -v`
 
 Expected: FAIL，因為 `MCP.models`、`MCP.errors` 及上述 classes 尚未存在。
 
-- [ ] **Step 3: 寫最小實作**
+- [x] **Step 3: 寫最小實作**
 
 在 `MCP/models.py` 實作 frozen dataclasses。`ToolContext.from_arguments` 必須拒絕非 object 的 arguments、缺少 `context` 或 `input`、非 object 的 context/input，以及未知 context keys；`to_headers` 只輸出 API 文件允許的 header，`accept_language` 缺省為 `zh-TW`，POST 的 `Idempotency-Key` 由 requirement 強制。`MCP/errors.py` 的 `AdapterError` 保存 code、status、details、retryable，並提供 `to_dict()` 返回這四個欄位及 message。
 
@@ -120,13 +120,13 @@ class RestRequest:
     headers: Mapping[str, str]
 ```
 
-- [ ] **Step 4: 執行測試確認通過**
+- [x] **Step 4: 執行測試確認通過**
 
 Run: `python3 -m unittest MCP.tests.test_models -v`
 
 Expected: 2 tests PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add MCP/__init__.py MCP/models.py MCP/errors.py MCP/tests/__init__.py MCP/tests/test_models.py
