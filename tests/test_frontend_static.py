@@ -61,6 +61,17 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("zh-HK", js)
         self.assertIn("speechSynthesis", js)
 
+    def test_app_wires_client_view_and_speech(self):
+        js = Path("frontend/app.js").read_text(encoding="utf-8")
+        for token in (
+            "MiddlewareClient",
+            "createInteractionView",
+            "createSpeechController",
+            "sendMessage",
+            "sendAction",
+        ):
+            self.assertIn(token, js)
+
 
 if __name__ == "__main__":
     unittest.main()
