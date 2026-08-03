@@ -144,7 +144,7 @@ git commit -m "feat: add MCP adapter contracts"
 - Produces `ToolRegistry.get(name: str) -> ToolDefinition`、`ToolRegistry.list_mcp_tools() -> list[dict[str, Any]]` 及 `ToolRegistry.names() -> tuple[str, ...]`。
 - Produces `build_registry() -> ToolRegistry`，返回固定 21-tool catalog。
 
-- [ ] **Step 1: 寫 failing tests**
+- [x] **Step 1: 寫 failing tests**
 
 ```python
 # MCP/tests/test_registry.py
@@ -185,13 +185,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: 執行測試確認失敗**
+- [x] **Step 2: 執行測試確認失敗**
 
 Run: `python3 -m unittest MCP.tests.test_registry -v`
 
 Expected: FAIL，因為 `build_registry` 尚未存在。
 
-- [ ] **Step 3: 寫最小實作**
+- [x] **Step 3: 寫最小實作**
 
 在 `MCP/registry.py` 宣告固定工具資料，不用反射或從 client 載入設定。catalog 必須逐項包含以下 path：
 
@@ -221,13 +221,13 @@ medical.get_task_status                                       GET  /mock/medical
 
 每項 schema 的 `input` properties 必須依對應 API 文件建立：GET 搜尋工具列出文件中的 query 欄位；path 工具列出 path ID；POST 工具將文件的 request body 欄位放入 object schema 並在 dispatch 時原樣送出。長者活動 status tool 要求 `resource_type` 為 `registration` 或 `phone_assistance`，並依 `registration_id` 或 `assistance_id` 選擇固定 route。每個 root schema 都使用 `context` 與 `input` required，context schema 只允許 `mock_user_id`、`patient_id`、`authorization`、`accept_language`、`request_id`、`idempotency_key`。
 
-- [ ] **Step 4: 執行測試確認通過**
+- [x] **Step 4: 執行測試確認通過**
 
 Run: `python3 -m unittest MCP.tests.test_registry -v`
 
 Expected: 4 tests PASS，且 catalog 數量為 21。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add MCP/registry.py MCP/tests/test_registry.py
