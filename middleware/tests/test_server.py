@@ -2,7 +2,7 @@ import json
 import threading
 import unittest
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 from middleware.server import create_application, create_http_server
 
@@ -15,6 +15,7 @@ class ServerTests(unittest.TestCase):
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         cls.base_url = f"http://127.0.0.1:{cls.server.server_port}"
+        cls.opener = build_opener(ProxyHandler({}))
 
     @classmethod
     def tearDownClass(cls):
@@ -24,7 +25,7 @@ class ServerTests(unittest.TestCase):
     def request(self, method, path, body=None):
         data = None if body is None else json.dumps(body).encode("utf-8")
         request = Request(self.base_url + path, data=data, method=method, headers={"Content-Type": "application/json"})
-        with urlopen(request) as response:
+        with self.opener.open(request) as response:
             return response.status, json.loads(response.read())
 
     def test_tools_endpoint_returns_registry(self):
@@ -35,7 +36,7 @@ class ServerTests(unittest.TestCase):
     def test_malformed_json_is_safe_client_error(self):
         request = Request(self.base_url + "/api/interactions/message", data=b"{", method="POST", headers={"Content-Type": "application/json"})
         with self.assertRaises(HTTPError) as raised:
-            urlopen(request)
+            self.opener.open(request)
         self.assertEqual(raised.exception.code, 400)
         error_body = json.loads(raised.exception.read())
         self.assertNotIn("traceback", json.dumps(error_body).lower())

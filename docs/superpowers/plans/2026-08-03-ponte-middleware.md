@@ -537,7 +537,7 @@ git commit -m "feat: expose Ponte middleware HTTP bridge"
 - Consumes the existing `mock_backends.server.create_http_server` and `middleware.server.create_http_server` helpers.
 - Verifies the public HTTP contracts without replacing the existing MCP registry or backend fixtures.
 
-- [ ] **Step 1: Write the failing end-to-end test**
+- [x] **Step 1: Write the failing end-to-end test**
 
 ```python
 def post_json(url, body):
@@ -584,31 +584,31 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
 
 Use `tempfile.TemporaryDirectory()` for backend data and actual ephemeral ports. The test must not call external network services.
 
-- [ ] **Step 2: Run the integration test and confirm it fails before the bridge is complete**
+- [x] **Step 2: Run the integration test and confirm it fails before the bridge is complete**
 
 Run: `python3 -m unittest tests.test_middleware_integration -v`
 
 Expected before implementation: FAIL because the middleware HTTP bridge does not yet exist.
 
-- [ ] **Step 3: Add the real backend assertions**
+- [x] **Step 3: Add the real backend assertions**
 
 After the message query passes, send `search_slots`, `select_slot`, `confirm` actions using service and slot IDs returned by the backend. Assert that the final `tool_events` include `medical.create_appointment` and `medical.get_task_status`, that the create event contains `consent: true`, and that a confirmation-free action sequence never produces a create event.
 
 Also call `/api/mcp/tools/call` directly with `medical.list_departments` and assert the response contains the mock department data. Use an invalid tool name and assert HTTP 400 with a stable safe error code.
 
-- [ ] **Step 4: Run the integration test to verify it passes**
+- [x] **Step 4: Run the integration test to verify it passes**
 
 Run: `python3 -m unittest tests.test_middleware_integration -v`
 
 Expected: all middleware-to-backend assertions PASS with no dependency on a pre-running server.
 
-- [ ] **Step 5: Run the complete Python test suite**
+- [x] **Step 5: Run the complete Python test suite**
 
 Run: `python3 -m unittest discover -v`
 
 Expected: existing MCP and mock-backend tests plus middleware tests PASS; no tests rely on network access outside the temporary local servers.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/test_middleware_integration.py middleware/server.py
