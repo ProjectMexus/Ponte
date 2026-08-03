@@ -4,16 +4,24 @@ Ponte middleware 是前端唯一需要呼叫的 HTTP bridge。它以 Python 標�
 
 ## 啟動
 
-需要 Python 3.13+，不需要額外 pip dependency。先啟動 mock backend：
+需要 Python 3.13+，不需要額外 pip dependency。第一次使用時先建立本地設定檔：
+
+```bash
+cp .env.example .env
+```
+
+在 `.env` 填入本地 backend、patient、authorization 及可選的 LLM 設定；`.env` 已被 Git ignore，不應提交 API key。shell 中已存在的同名環境變數會優先於 `.env`。
+
+先啟動 mock backend：
 
 ```bash
 python3 -m mock_backends.server --host 127.0.0.1 --port 8080 --data-dir /tmp/ponte-mock-data
 ```
 
-再啟動 middleware：
+再啟動 middleware；不需要每次在命令前 `set`：
 
 ```bash
-PONTE_BACKEND_URL=http://127.0.0.1:8080 python3 -m middleware.server --host 127.0.0.1 --port 8090
+python3 -m middleware.server --host 127.0.0.1 --port 8090
 ```
 
 檢查 middleware 和 backend：

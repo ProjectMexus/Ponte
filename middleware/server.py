@@ -14,6 +14,7 @@ from MCP.registry import build_registry
 from MCP.rest_adapter import RestAdapter
 
 from .contracts import InteractionActionRequest, InteractionRequest, ToolCall, ToolExecutionResult
+from .config import load_dotenv
 from .controller import InteractionController
 from .execution import DirectMcpExecutionStage, ExecutionPipeline
 from .session import SessionStore
@@ -78,6 +79,7 @@ def create_application(
 ) -> MiddlewareApplication:
     """Create one isolated middleware application with in-memory sessions."""
 
+    load_dotenv()
     origins = _frontend_origins(os.environ.get("PONTE_FRONTEND_ORIGINS"))
     return MiddlewareApplication(
         backend_url,
@@ -310,6 +312,7 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8090, type=int)
     args = parser.parse_args()
+    load_dotenv()
     application = create_application(
         os.environ.get("PONTE_BACKEND_URL", "http://127.0.0.1:8080"),
         os.environ.get("PONTE_PATIENT_ID", "PAT-DEMO-001"),
