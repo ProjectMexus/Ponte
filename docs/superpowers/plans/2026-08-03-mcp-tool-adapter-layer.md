@@ -371,7 +371,7 @@ git commit -m "feat: add documented REST tool adapter"
 - Produces `MCPServer.run(stdin: TextIO, stdout: TextIO) -> None`，一行處理一個 JSON-RPC message。
 - `python -m MCP` 從環境變數建立 `build_registry()`、`RestAdapter.from_environment()` 和 `MCPServer`，讀 stdin、寫 stdout。
 
-- [ ] **Step 1: 寫 failing tests**
+- [x] **Step 1: 寫 failing tests**
 
 ```python
 # MCP/tests/test_server.py
@@ -421,25 +421,25 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: 執行測試確認失敗**
+- [x] **Step 2: 執行測試確認失敗**
 
 Run: `python3 -m unittest MCP.tests.test_server -v`
 
 Expected: FAIL，因為 `MCP.server` 和 `MCP.__main__` 尚未存在。
 
-- [ ] **Step 3: 寫最小實作**
+- [x] **Step 3: 寫最小實作**
 
 `handle` 必須返回標準 JSON-RPC 2.0 response。`initialize` 返回 protocol version `2025-03-26`、serverInfo 和 `capabilities.tools.listChanged=false`；`notifications/initialized` 返回 `None`。`tools/list` 返回 `{"tools": registry.list_mcp_tools()}`。`tools/call` 以 `params.name` 查 registry 並呼叫 adapter；成功結果包含 `content` 的 `text` item 和 `structuredContent`，adapter/backend error 結果包含 `content`、`structuredContent.error` 及 `isError: true`。未知 method 使用 `-32601`，缺少或錯誤的 params 使用 `-32602`，不把 Python traceback 放進 response。
 
 `run` 必須逐行 `json.loads`，忽略空白行；解析錯誤寫 JSON-RPC `-32700` response；request 沒有 `id` 時視為 notification，不輸出 response。stdout 每行只輸出一個 JSON object，使用 `ensure_ascii=False`；stderr 可輸出錯誤診斷。
 
-- [ ] **Step 4: 執行測試確認通過**
+- [x] **Step 4: 執行測試確認通過**
 
 Run: `python3 -m unittest MCP.tests.test_server -v`
 
 Expected: 4 tests PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add MCP/server.py MCP/__main__.py MCP/tests/test_server.py
