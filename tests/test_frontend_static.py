@@ -54,6 +54,13 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("tool_events", js)
         self.assertIn("actions", js)
 
+    def test_speech_module_has_fallback_and_cantonese_locale(self):
+        js = Path("frontend/speech.js").read_text(encoding="utf-8")
+        self.assertIn("SpeechRecognition", js)
+        self.assertIn("webkitSpeechRecognition", js)
+        self.assertIn("zh-HK", js)
+        self.assertIn("speechSynthesis", js)
+
 
 if __name__ == "__main__":
     unittest.main()

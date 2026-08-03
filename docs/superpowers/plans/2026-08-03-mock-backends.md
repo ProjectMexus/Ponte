@@ -254,7 +254,7 @@ Expected: FAIL，因為 Medical modules 尚未存在。
 
 使用文件指定 Authorization: Bearer mock-user-token convention；patient isolation 依 X-Patient-Id。屬於另一 patient 的 resource 統一返回 404。
 
-- [ ] Step 5: 執行 tests 並 commit
+- [x] Step 5: 執行 tests 並 commit
 
 Run: python -m unittest tests.medical.test_medical_backend -v
 
@@ -310,7 +310,7 @@ Expected: FAIL，因為 Social Welfare modules 尚未存在。
 
 支援 /mock/social-welfare/services、/mock/social-welfare/referrals、/mock/social-welfare/referrals/{referralId}、/mock/social-welfare/referrals/{referralId}/assign。service catalog 只讀；只在 social welfare data directory 持久化 referrals 和 idempotency records。
 
-- [ ] Step 5: 執行 tests 並 commit
+- [x] Step 5: 執行 tests 並 commit
 
 Run: python -m unittest tests.social_welfare.test_social_welfare_backend -v
 
