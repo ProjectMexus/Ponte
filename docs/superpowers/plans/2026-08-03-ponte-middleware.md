@@ -305,7 +305,7 @@ git commit -m "feat: add composable middleware execution pipeline"
 - Produces `handle_action(request: InteractionActionRequest) -> dict[str, Any]`.
 - Consumes `ToolCall`, `ToolExecutionResult`, `SessionStore` and `build_response`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 import unittest
@@ -379,13 +379,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python3 -m unittest middleware.tests.test_controller -v`
 
 Expected: FAIL because `InteractionController` is not implemented.
 
-- [ ] **Step 3: Implement the medical state machine and safe context factory**
+- [x] **Step 3: Implement the medical state machine and safe context factory**
 
 Recognize `醫療`, `預約`, `覆診`, `睇醫生`, `改期` as the first intent group. A recognized message calls `medical.get_my_appointments` and then `medical.list_appointment_services`; an unrecognized message returns a helpful text response with no tool call.
 
@@ -405,13 +405,13 @@ human_help            → human_handoff
 
 Normalize result envelopes defensively: accept `data` as list or object, extract task ID from either `data.task_id` or `task.id`, and convert missing required result data into a safe `BACKEND_INVALID_RESPONSE` error response.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `python3 -m unittest middleware.tests.test_controller -v`
 
 Expected: all intent, state transition and confirmation-gate tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add middleware/controller.py middleware/tests/test_controller.py
