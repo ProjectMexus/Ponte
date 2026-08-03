@@ -1,0 +1,1 @@
+"""Mock medical domain backend."""
