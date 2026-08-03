@@ -105,7 +105,7 @@ The stable middleware response shape is:
 - Produces `SessionStore.get_or_create(session_id: str) -> SessionState` and `SessionStore.save(state: SessionState) -> None`.
 - Produces `build_response(state: SessionState, assistant_message: str, actions: Sequence[Mapping[str, Any]]) -> dict[str, Any]`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 from datetime import datetime, timezone
@@ -150,13 +150,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python3 -m unittest middleware.tests.test_contracts -v`
 
 Expected: FAIL with `ModuleNotFoundError` or missing contract symbols because the middleware package is not implemented.
 
-- [ ] **Step 3: Implement the minimal contracts and state store**
+- [x] **Step 3: Implement the minimal contracts and state store**
 
 Validate non-empty `session_id` and `message`, restrict `source` to `text` or `voice`, reject unknown action values only at the controller boundary, and make `SessionState` fields explicit:
 
@@ -176,13 +176,13 @@ class SessionState:
 
 Use a dictionary protected by `threading.Lock` so concurrent browser requests cannot create duplicate session objects. `build_response` must return JSON-serializable copies and never expose `ToolCall` objects directly.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `python3 -m unittest middleware.tests.test_contracts -v`
 
 Expected: all contract and session tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add middleware/__init__.py middleware/contracts.py middleware/session.py middleware/tests
