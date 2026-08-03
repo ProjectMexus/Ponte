@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0c5b61" />
+    <title>Ponte｜公共服務助手</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="brand-block">
+        <p class="eyebrow">PONTE</p>
+        <h1>公共服務助手</h1>
+        <p class="brand-subtitle">你說出需要，我幫你一步一步辦好。</p>
+      </div>
+      <div class="header-status">
+        <span class="mode-badge">測試模式</span>
+        <span id="health-status" class="health-status" role="status" aria-live="polite">正在檢查連線…</span>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="conversation-panel" aria-labelledby="conversation-heading">
+        <div class="panel-heading">
+          <div>
+            <p class="section-kicker">第一步</p>
+            <h2 id="conversation-heading">告訴我你需要甚麼</h2>
+          </div>
+          <span class="helper-pill">可以打字，也可以說話</span>
+        </div>
+
+        <div id="global-error" class="alert alert-error" role="alert" hidden></div>
+
+        <div id="conversation-list" class="conversation-list" aria-live="polite" aria-label="對話內容"></div>
+
+        <div class="quick-start" aria-label="常用說法">
+          <p class="quick-start-label">你也可以直接按：</p>
+          <div class="quick-start-actions">
+            <button class="quick-chip" type="button" data-quick-message="我想查詢醫療預約">查詢醫療預約</button>
+            <button class="quick-chip" type="button" data-quick-message="我想預約醫療服務">預約醫療服務</button>
+            <button class="quick-chip" type="button" data-quick-message="我想找人幫忙">需要人工幫忙</button>
+          </div>
+        </div>
+
+        <form id="message-form" class="message-form">
+          <label for="message-input">想對 Ponte 說什麼？</label>
+          <textarea id="message-input" rows="2" autocomplete="off" placeholder="例如：我想查詢醫療預約"></textarea>
+          <p id="speech-status" class="field-help" role="status" aria-live="polite">你可以先打字測試。</p>
+          <div class="input-actions">
+            <button id="mic-button" type="button" class="button button-secondary" aria-pressed="false">按這裡說話</button>
+            <button id="speak-stop-button" type="button" class="button button-secondary">停止朗讀</button>
+            <button id="send-button" type="submit" class="button button-primary">送出</button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="workspace-panel" aria-labelledby="workspace-heading">
+        <div class="panel-heading workspace-heading">
+          <div>
+            <p class="section-kicker">第二步</p>
+            <h2 id="workspace-heading">服務工作區</h2>
+          </div>
+          <span class="visible-execution">每一步都看得見</span>
+        </div>
+
+        <div class="task-summary" aria-live="polite">
+          <span class="task-summary-label">目前進度</span>
+          <strong id="task-state-label">等待你的需要</strong>
+        </div>
+
+        <ol id="task-steps" class="task-steps" aria-label="服務流程"></ol>
+        <div id="task-content" class="task-content"></div>
+        <div id="action-list" class="action-list" aria-label="可以進行的操作"></div>
+      </aside>
+    </main>
+
+    <footer class="site-footer">
+      <span>重要操作一定會先請你確認。</span>
+      <button id="human-help-button" type="button" class="footer-link">需要人工幫忙</button>
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

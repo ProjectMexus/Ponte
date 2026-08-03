@@ -28,6 +28,26 @@ class FrontendStaticTests(unittest.TestCase):
         with self.assertRaises(Exception):
             self.opener.open(self.base_url + "/../docs/PonteArch.md")
 
+    def test_index_has_required_landmarks_and_controls(self):
+        html = Path("frontend/index.html").read_text(encoding="utf-8")
+        for token in (
+            "<main",
+            'aria-live="polite"',
+            'id="message-input"',
+            'id="mic-button"',
+            'id="speak-stop-button"',
+            'id="task-steps"',
+            'id="action-list"',
+        ):
+            self.assertIn(token, html)
+        self.assertIn('lang="zh-Hant"', html)
+
+    def test_styles_define_large_controls_and_focus(self):
+        css = Path("frontend/styles.css").read_text(encoding="utf-8")
+        self.assertRegex(css, r"font-size:\s*20px")
+        self.assertRegex(css, r"min-height:\s*56px")
+        self.assertIn(":focus-visible", css)
+
 
 if __name__ == "__main__":
     unittest.main()
