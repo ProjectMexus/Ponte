@@ -566,7 +566,7 @@ git commit -m "test: verify MCP backend connectivity"
 - Produces 一份繁體中文 README，說明安裝前提、啟動命令、`PONTE_BACKEND_URL`、context envelope、21 個工具範圍、POST idempotency、醫療 authorization，以及 backend 尚未啟動時的錯誤。
 - Produces 可重現的驗證命令和結果摘要，不宣稱未啟動的真實 backend 已連通。
 
-- [ ] **Step 1: 寫 README 驗收檢查**
+- [x] **Step 1: 寫 README 驗收檢查**
 
 ```bash
 rg -n "python3 -m MCP|PONTE_BACKEND_URL|context|idempotency_key|authorization|21|tools/list|tools/call" MCP/README.md
@@ -574,7 +574,7 @@ rg -n "python3 -m MCP|PONTE_BACKEND_URL|context|idempotency_key|authorization|21
 
 Expected: 每個 pattern 至少有一個匹配；README 不含 `TBD`、`TODO` 或未完成句子。
 
-- [ ] **Step 2: 寫 README**
+- [x] **Step 2: 寫 README**
 
 README 必須包含：
 
@@ -586,7 +586,7 @@ python3 -m compileall -q MCP
 
 並提供一個 `tools/call` 的 JSON 範例，清楚區分 `context` header metadata 與 `input` backend body；列出不支援 social-welfare、notification 及任意 REST proxy 的原因。
 
-- [ ] **Step 3: 執行交付前完整驗證**
+- [x] **Step 3: 執行交付前完整驗證**
 
 Run:
 
@@ -599,7 +599,7 @@ rg -n "TBD|TODO|待補|待定|PLACEHOLDER|FIXME" MCP docs/superpowers/specs/2026
 
 Expected: unittest exit code 0、compileall exit code 0、`git diff --check` 無輸出、placeholder search 無輸出。最後查看 `git status --short`，確認本計畫新增／修改範圍只在 `MCP/`、本 README 及本 plan；backend 相關未追蹤變更保持不動。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add MCP/README.md docs/superpowers/plans/2026-08-03-mcp-tool-adapter-layer.md
