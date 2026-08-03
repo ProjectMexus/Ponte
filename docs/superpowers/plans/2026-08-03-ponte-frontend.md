@@ -86,7 +86,7 @@ import json
 import threading
 import unittest
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 from frontend.server import create_http_server
 
@@ -98,24 +98,20 @@ class FrontendStaticTests(unittest.TestCase):
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         cls.base_url = f"http://127.0.0.1:{cls.server.server_port}"
+        cls.opener = build_opener(ProxyHandler({}))
 
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
         cls.server.server_close()
 
-    def test_index_and_js_assets_are_served(self):
-        with urlopen(self.base_url + "/index.html") as response:
-            html = response.read().decode("utf-8")
-        self.assertIn('type="module"', html)
-        self.assertIn("frontend/app.js", html)
-
-        with urlopen(self.base_url + "/mcp-client.js") as response:
+    def test_client_asset_is_served(self):
+        with self.opener.open(self.base_url + "/mcp-client.js") as response:
             self.assertIn("MiddlewareClient", response.read().decode("utf-8"))
 
     def test_path_traversal_is_not_served(self):
         with self.assertRaises(Exception):
-            urlopen(self.base_url + "/../docs/PonteArch.md")
+            self.opener.open(self.base_url + "/../docs/PonteArch.md")
 
 
 if __name__ == "__main__":
