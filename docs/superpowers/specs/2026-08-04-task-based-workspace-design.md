@@ -59,7 +59,7 @@ Middleware 負責：
 - 對 action response 保持目前 task state，不在每次 action 時重設。
 - 未來可在 response 加入 `task_id`，讓 frontend 使用 backend／LLM task identity 取代 local fallback。
 
-LLM 或 intent recognizer 負責理解輸入和產生結構化意圖，但不直接改寫工作區，也不直接呼叫 mock backend。
+Intent LLM／intent recognizer 只負責理解使用者文字或語音並產生結構化 intent，不直接改寫工作區，也不直接呼叫 mock backend。Task Recovery LLM 是另一個獨立元件，位於 `middleware/task_manager/`，只讀取經過 sanitise 的 backend/tool 結果和 workflow context，理解失敗原因，產生 `RecoveryPlan` 供 middleware 告知使用者下一步；它不辨識 intent、不共用 Intent LLM 的 prompt／context，也不直接執行 action 或 tool。
 
 ### Middleware Task Manager
 
@@ -68,9 +68,10 @@ LLM 或 intent recognizer 負責理解輸入和產生結構化意圖，但不直
 - `contracts.py`：task state、transition、recovery plan 和對外 response 欄位；
 - `manager.py`：新 task、action chain、step/tool result、resume、cancel、complete 和 fail；
 - `recovery.py`：backend error 或空結果到 `RecoveryPlan` 的 deterministic mapping；
+- `interpreter.py`：Task Recovery LLM 的獨立介面與 deterministic fallback 對接；
 - `transitions.py`：可允許狀態轉移與 terminal state 規則。
 
-`InteractionController` 保留 intent 辨識和 workflow 順序，不再直接散落修改 task lifecycle。`SessionState` 仍是 in-memory session 容器；Task Manager 是它與 execution pipeline 之間的 task adapter。LLM 未來只能讀取白名單化的 `RecoveryPlan` 和 workflow context，再透過既有 action 或 `continueTask()` contract 繼續任務。
+`InteractionController` 保留 intent 辨識和 workflow 順序，不再直接散落修改 task lifecycle。`SessionState` 仍是 in-memory session 容器；Task Manager 是它與 execution pipeline 之間的 task adapter。Intent LLM 與 Task Recovery LLM 分開管理，後者只能讀取白名單化的 backend result／`RecoveryPlan` context，再透過既有 action 或 `continueTask()` contract 繼續任務。
 
 ## 任務模型與擴展接口
 
@@ -83,7 +84,7 @@ LLM 或 intent recognizer 負責理解輸入和產生結構化意圖，但不直
   title: "查詢醫療預約",
   channel: "text", // text | voice | ui
   status: "running", // running | completed | cancelled | failed | human_handoff
-  taskState: "querying", // querying | awaiting_user_input | ...
+  taskState: "querying", // querying | selecting_service | selecting_slot | awaiting_confirmation | awaiting_user_input | completed | cancelled | failed | human_handoff
   currentStep: "load_appointments",
   response: {
     steps: [],

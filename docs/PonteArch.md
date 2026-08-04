@@ -215,6 +215,33 @@ Task Manager 保留 `SessionState` 作為目前 workflow 的 in-memory 容器，
 
 `recovery` 是 LLM-ready 的語義資料，但 LLM 不直接執行 tool。前端只把白名單化的 `options` 轉為既有 actions；例如替代時段仍回到 `search_slots`，預約提交仍必須經過原本的 `confirm`。只有 `completed`、`cancelled`、`failed` 和 `human_handoff` 會自動收合；`awaiting_user_input` 保持展開，直到使用者補充資料、選擇方案、取消或轉交人工。
 
+## 3.3 Intent LLM 與 Task Recovery LLM 分離
+
+Ponte 有兩個不同目的的 LLM 邊界，必須分開管理：
+
+```text
+使用者文字／語音
+        │
+        ▼
+Intent LLM / IntentRecognizer
+        │ 只產生 IntentDecision
+        ▼
+InteractionController / Workflow
+        │ 呼叫受控 tool
+        ▼
+ToolExecutionResult / backend response
+        │ sanitise 後
+        ▼
+Task Recovery LLM
+        │ 只產生 RecoveryPlan
+        ▼
+Task Manager → TaskResponse → Frontend Task Workspace
+```
+
+Intent LLM 只理解使用者想做什麼，例如查詢預約或開始預約；它不解讀 backend failure，也不決定 recovery message。Task Recovery LLM 只理解工具／backend 返回的成功、失敗、缺少欄位、額滿或候選資料，向使用者說明原因並提出下一步可能方案；它不辨識 intent、不改寫 workflow state、不直接呼叫 tool。
+
+兩者必須使用不同的 interface、system prompt、context allowlist、設定和測試 double。`middleware/intent.py` 管理 `IntentRecognizer`；`middleware/task_manager/interpreter.py` 管理 `TaskRecoveryInterpreter`。第一版 Task Recovery LLM 使用 deterministic recovery policy 作為 fallback，未來可注入獨立的 LLM client。所有模型輸出都必須先驗證成 `RecoveryPlan`，再由 Task Manager 轉成既有 action；LLM 不可跳過確認節點。
+
 ------
 
 # 4. 核心架構決策

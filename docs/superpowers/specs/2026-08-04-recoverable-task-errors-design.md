@@ -4,12 +4,13 @@
 
 當 workflow 中的 backend 或工具呼叫失敗時，middleware 不應只把目前 task 標成終止錯誤。對於可以透過補充資料、改選方案或重試而繼續的失敗，middleware 要產生結構化的恢復方案，讓前端向使用者說明原因並提供下一步；未來 LLM 可以讀取同一份方案來理解使用者的補充內容，但不能直接繞過既有 workflow 或確認節點。
 
-本設計把 task lifecycle、狀態轉移、工具結果接入和 recovery policy 收斂到 `middleware/task_manager/`，讓 `InteractionController` 專注於 intent 與 workflow 編排。
+本設計把 task lifecycle、狀態轉移、工具結果接入和 recovery policy 收斂到 `middleware/task_manager/`，讓 `InteractionController` 專注於 intent 與 workflow 編排。Intent LLM 與 Task Recovery LLM 是兩個不同的能力邊界：前者理解使用者輸入，後者理解 backend/tool 結果並產生下一步說明，不能共用同一個 prompt、context 或執行入口。
 
 ## 範圍
 
 - 新增 `awaiting_user_input` 作為非終止 task state。
 - 新增 `Task Manager` package，集中管理目前 session task 的 transition、tool result 接入和 response projection。
+- 將 Intent LLM 與 Task Recovery LLM 分開管理；前者只產生 intent，後者只產生結構化恢復方案。
 - 將 backend error 與空的可用時段結果轉換為 `RecoveryPlan`。
 - 支援缺少資料、沒有名額、暫時性 backend error 和不可安全恢復錯誤四種 policy 分類。
 - 前端 task card 顯示 recovery 說明和既有 action options，恢復 action 更新同一張卡片。
@@ -25,17 +26,29 @@
 ## 架構
 
 ```text
-使用者文字／語音／UI action
+使用者文字／語音
+          │
+          ▼
+   Intent LLM / IntentRecognizer
+   user input → IntentDecision
           │
           ▼
    InteractionController
-   intent + workflow order
+   workflow order
+          │
+          ▼
+   ExecutionPipeline / backend result
+          │ sanitised result
+          ▼
+   Task Recovery LLM / deterministic fallback
+   backend result → RecoveryPlan
           │
           ▼
    middleware/task_manager
    ├─ contracts      public task/recovery values
    ├─ manager        lifecycle and tool-result integration
-   ├─ recovery       error/result → RecoveryPlan
+   ├─ recovery       deterministic policy and sanitisation
+   ├─ interpreter    Task Recovery LLM interface
    └─ transitions    allowed state transitions
           │
           ├───────────────┐
@@ -68,6 +81,8 @@ fail(state, message)
 ```
 
 `middleware/task_manager/recovery.py` 是 deterministic policy。它只使用白名單化的 error code、workflow step、目前 task data 及 backend 回傳的候選資料產生 `RecoveryPlan`；不執行 action。
+
+`middleware/task_manager/interpreter.py` 定義 Task Recovery LLM 的獨立介面。它接收已 sanitise 的 `ToolExecutionResult`、workflow step 和 `RecoveryPlan` context，輸出符合 `RecoveryPlan` 的 user-facing explanation、required fields 和 options；不接收原始 intent prompt，不負責 intent recognition，也不直接呼叫 tool。第一版由 deterministic recovery policy 實作 fallback，未來可注入獨立的 recovery LLM client。
 
 `middleware/task_manager/transitions.py` 定義狀態轉移規則。`awaiting_user_input` 可以回到 `querying`、`selecting_service`、`selecting_slot` 或 `awaiting_confirmation`，也可以轉為 `cancelled` 或 `human_handoff`；`completed`、`cancelled`、`failed` 和 `human_handoff` 是 terminal state。
 
