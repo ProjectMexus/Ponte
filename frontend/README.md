@@ -10,6 +10,12 @@ python3 -m frontend.server --host 127.0.0.1 --port 5173
 
 開啟 [http://127.0.0.1:5173](http://127.0.0.1:5173)。前端預設連接 `http://127.0.0.1:8090` 的 middleware；middleware 尚未啟動時，頁面仍然可以載入，並會顯示可理解的連線錯誤，文字輸入仍保持可用。
 
+完整 stack runner 會列出可直接開啟的 URL；若 middleware 使用其他 port，也可以使用 query override：
+
+```text
+http://127.0.0.1:15173/?middleware=http://127.0.0.1:18090
+```
+
 如需更換 middleware 位置，可在載入 `app.js` 前設定：
 
 ```html
@@ -37,4 +43,4 @@ node --check frontend/interaction-view.js
 node --check frontend/speech.js
 ```
 
-Middleware 的實際整合驗證留待 `docs/superpowers/plans/2026-08-03-ponte-middleware.md` 執行時進行。
+完整驗收流程請參考 repo 根目錄的 `README.md`：輸入「我想查詢醫療預約」並送出，畫面應顯示 middleware 已連線、`selecting_service`，以及兩個由 MCP 回傳的 medical tool events。

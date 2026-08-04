@@ -9,7 +9,14 @@ export class MiddlewareError extends Error {
 }
 
 function defaultBaseUrl() {
-  return globalThis.PONTE_MIDDLEWARE_URL || "http://127.0.0.1:8090";
+  if (globalThis.PONTE_MIDDLEWARE_URL) {
+    return globalThis.PONTE_MIDDLEWARE_URL;
+  }
+  if (typeof globalThis.location !== "undefined") {
+    const configured = new URL(globalThis.location.href).searchParams.get("middleware");
+    if (configured) return configured;
+  }
+  return "http://127.0.0.1:8090";
 }
 
 export class MiddlewareClient {

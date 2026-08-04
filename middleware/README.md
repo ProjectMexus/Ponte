@@ -1,6 +1,6 @@
 # Ponte Middleware
 
-Ponte middleware 是前端唯一需要呼叫的 HTTP bridge。它以 Python 標準庫提供固定 API，將 Interaction Controller 的醫療預約流程接到既有 21 個 MCP registry tools 和 mock backend；前端不需要知道 backend URL、HTTP method、headers 或 MCP envelope。
+Ponte middleware 是前端唯一需要呼叫的 HTTP bridge。它以 Python 標準庫提供固定 API，將 Interaction Controller 的醫療預約流程接到既有 21 個 MCP tools；runtime 會由 middleware 啟動一個 `python3 -m MCP` stdio child，再由 MCP 的 RestAdapter 連接 mock backend。前端不需要知道 backend URL、HTTP method、headers 或 MCP envelope。
 
 ## 啟動
 
@@ -24,6 +24,14 @@ python3 -m mock_backends.server --host 127.0.0.1 --port 8080 --data-dir /tmp/pon
 python3 -m middleware.server --host 127.0.0.1 --port 8090
 ```
 
+一般完整驗收可直接在 repo 根目錄執行：
+
+```bash
+python3 scripts/run_stack.py
+```
+
+這個 runner 會啟動 backend、middleware、middleware 管理的 MCP stdio server 和 frontend。瀏覽器輸入「我想查詢醫療預約」後，應看到 `selecting_service`、服務已連線，以及兩個 medical tool events。
+
 檢查 middleware 和 backend：
 
 ```bash
@@ -38,7 +46,7 @@ Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_UR
 
 | 變數 | 預設值 | 用途 |
 | --- | --- | --- |
-| `PONTE_BACKEND_URL` | `http://127.0.0.1:8080` | 由 `RestAdapter` 使用的 backend base URL；path 和 method 仍由固定 registry 決定。 |
+| `PONTE_BACKEND_URL` | `http://127.0.0.1:8080` | 傳給 middleware 管理的 MCP child，再由 MCP RestAdapter 使用；path 和 method 仍由固定 registry 決定。 |
 | `PONTE_FRONTEND_ORIGINS` | `http://127.0.0.1:5173,http://localhost:5173` | 逗號分隔的 CORS origin allowlist。 |
 | `PONTE_PATIENT_ID` | `PAT-DEMO-001` | Interaction Controller 使用的 mock patient context。 |
 | `PONTE_AUTHORIZATION` | `Bearer mock-user-token` | Interaction Controller 使用的 mock authorization context。 |
@@ -142,7 +150,7 @@ Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_UR
 }
 ```
 
-middleware 會以設定值覆蓋 authorization、patient、language 和 request ID，再交給受控 adapter；client 不能注入任意 backend headers。adapter 的 backend error 會以 `ok: false` 安全返回，malformed request、unknown tool 和 invalid arguments 則回 HTTP 400。
+middleware 會以設定值覆蓋 authorization、patient、language 和 request ID，再透過 MCP stdio 傳給受控 adapter；client 不能注入任意 backend headers。MCP 或 backend error 會以 `ok: false` 安全返回，malformed request、unknown tool 和 invalid arguments 則回 HTTP 400。
 
 ## CORS 與前端
 

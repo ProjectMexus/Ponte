@@ -2,6 +2,30 @@
 
 這是一組供 Ponte Demo 使用的 mock domain backend，依據 `docs/PonteArch.md` 和 `docs/api/` 建立。它們不連接真實政府、醫療或社福系統，不代表正式 API，也不執行真實身份驗證、醫療判斷、付款或電話撥出。
 
+## 完整 Demo 啟動與測試
+
+要驗證 `Frontend → Middleware → MCPServer → Mock Backend`，在 repo 根目錄執行：
+
+```bash
+python3 scripts/run_stack.py
+```
+
+runner 會依序啟動 mock backend、middleware、middleware 管理的 MCP stdio server，以及 frontend。看到 ready 訊息後開啟它列出的 Frontend URL，輸入：
+
+```text
+我想查詢醫療預約
+```
+
+按「送出」，成功時畫面會顯示已連線、`selecting_service` 狀態，以及 `medical.get_my_appointments` 和 `medical.list_appointment_services` 兩個 tool event。按 `Ctrl-C` 會反向關閉三個服務，middleware 也會清理 MCP 子程序。
+
+若需要分開除錯，可依序在三個 terminal 執行：
+
+```bash
+python3 -m mock_backends.server --host 127.0.0.1 --port 8080 --data-dir /tmp/ponte-mock-data
+python3 -m middleware.server --host 127.0.0.1 --port 8090
+python3 -m frontend.server --host 127.0.0.1 --port 5173
+```
+
 ## 啟動
 
 需要 Python 3.11 或以上，不需要第三方依賴：

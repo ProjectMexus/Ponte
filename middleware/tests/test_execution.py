@@ -1,7 +1,8 @@
 import unittest
 
+from MCP.errors import AdapterError
 from middleware.contracts import ToolCall, ToolExecutionResult
-from middleware.execution import DirectMcpExecutionStage, ExecutionPipeline
+from middleware.execution import DirectMcpExecutionStage, ExecutionPipeline, McpExecutionStage
 from MCP.registry import build_registry
 
 
@@ -12,6 +13,23 @@ class RecordingAdapter:
     def invoke(self, definition, arguments):
         self.calls.append((definition.name, arguments))
         return {"request_id": "REQ-1", "data": {"ok": True}}
+
+
+class RecordingMcpClient:
+    def __init__(self, payload=None, error=None):
+        self.calls = []
+        self.payload = payload or {"request_id": "REQ-MCP-1", "data": {"ok": True}}
+        self.error = error
+        self.closed = False
+
+    def call_tool(self, name, arguments):
+        self.calls.append((name, arguments))
+        if self.error:
+            raise self.error
+        return self.payload
+
+    def close(self):
+        self.closed = True
 
 
 class ExecutionTests(unittest.TestCase):
@@ -25,6 +43,39 @@ class ExecutionTests(unittest.TestCase):
         ))
         self.assertTrue(result.ok)
         self.assertEqual(adapter.calls[0][0], "medical.list_departments")
+
+    def test_mcp_stage_calls_stdio_client_with_registry_tool(self):
+        client = RecordingMcpClient()
+        result = ExecutionPipeline([
+            McpExecutionStage(build_registry(), client),
+        ]).dispatch(ToolCall(
+            "medical.list_departments",
+            {
+                "context": {"authorization": "Bearer mock-user-token"},
+                "input": {},
+            },
+            "load_departments",
+        ))
+
+        self.assertTrue(result.ok)
+        self.assertEqual(client.calls[0][0], "medical.list_departments")
+
+    def test_mcp_stage_converts_adapter_error_to_tool_result(self):
+        client = RecordingMcpClient(error=AdapterError(
+            code="MCP_UNAVAILABLE",
+            message="MCP unavailable",
+            status=503,
+        ))
+        result = ExecutionPipeline([
+            McpExecutionStage(build_registry(), client),
+        ]).dispatch(ToolCall(
+            "medical.list_departments",
+            {"context": {}, "input": {}},
+            "health",
+        ))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error["code"], "MCP_UNAVAILABLE")
 
     def test_pipeline_preserves_stage_order_for_future_workflow_stage(self):
         events = []

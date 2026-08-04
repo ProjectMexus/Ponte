@@ -7,10 +7,31 @@ from urllib.request import ProxyHandler, Request, build_opener
 from middleware.server import create_application, create_http_server
 
 
+class RecordingMcpClient:
+    def __init__(self):
+        self.closed = False
+
+    def start(self):
+        return None
+
+    def call_tool(self, name, arguments):
+        del name, arguments
+        return {"request_id": "REQ-TEST", "data": {"departments": []}}
+
+    def close(self):
+        self.closed = True
+
+
 class ServerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.application = create_application("http://backend.test", "PAT-DEMO-001", "Bearer mock-user-token")
+        cls.mcp_client = RecordingMcpClient()
+        cls.application = create_application(
+            "http://backend.test",
+            "PAT-DEMO-001",
+            "Bearer mock-user-token",
+            mcp_client=cls.mcp_client,
+        )
         cls.server = create_http_server("127.0.0.1", 0, cls.application)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
@@ -32,6 +53,10 @@ class ServerTests(unittest.TestCase):
         status, payload = self.request("GET", "/api/mcp/tools")
         self.assertEqual(status, 200)
         self.assertEqual(len(payload["tools"]), 21)
+
+    def test_server_close_closes_mcp_client(self):
+        self.application.close()
+        self.assertTrue(self.mcp_client.closed)
 
     def test_malformed_json_is_safe_client_error(self):
         request = Request(self.base_url + "/api/interactions/message", data=b"{", method="POST", headers={"Content-Type": "application/json"})

@@ -11,12 +11,12 @@ from typing import Any, Type
 from urllib.parse import urlsplit
 
 from MCP.registry import build_registry
-from MCP.rest_adapter import RestAdapter
 
 from .contracts import InteractionActionRequest, InteractionRequest, ToolCall, ToolExecutionResult
 from .config import load_dotenv
 from .controller import InteractionController
-from .execution import DirectMcpExecutionStage, ExecutionPipeline
+from .execution import ExecutionPipeline, McpExecutionStage
+from .mcp_client import McpStdioClient
 from .session import SessionStore
 
 
@@ -40,15 +40,17 @@ class MiddlewareApplication:
         authorization: str,
         *,
         frontend_origins: tuple[str, ...] = (),
+        mcp_client: McpStdioClient | None = None,
     ) -> None:
         self.backend_url = backend_url.rstrip("/")
         self.patient_id = patient_id
         self.authorization = authorization
         self.frontend_origins = frontend_origins
         self.registry = build_registry()
-        self.adapter = RestAdapter(self.backend_url)
+        self.mcp_client = mcp_client or McpStdioClient(self.backend_url)
+        self.mcp_client.start()
         self.pipeline = ExecutionPipeline([
-            DirectMcpExecutionStage(self.registry, self.adapter),
+            McpExecutionStage(self.registry, self.mcp_client),
         ])
         self.sessions = SessionStore()
         self.controller = InteractionController(
@@ -57,6 +59,11 @@ class MiddlewareApplication:
             patient_id,
             authorization,
         )
+
+    def close(self) -> None:
+        """Release the MCP child process owned by this application."""
+
+        self.mcp_client.close()
 
     def dispatch_tool(
         self,
@@ -76,6 +83,8 @@ def create_application(
     backend_url: str,
     patient_id: str,
     authorization: str,
+    *,
+    mcp_client: McpStdioClient | None = None,
 ) -> MiddlewareApplication:
     """Create one isolated middleware application with in-memory sessions."""
 
@@ -86,7 +95,20 @@ def create_application(
         patient_id,
         authorization,
         frontend_origins=origins,
+        mcp_client=mcp_client,
     )
+
+
+class MiddlewareHTTPServer(ThreadingHTTPServer):
+    """HTTP server that closes the application-owned MCP process."""
+
+    def __init__(self, server_address: tuple[str, int], handler: Type[BaseHTTPRequestHandler], application: MiddlewareApplication):
+        super().__init__(server_address, handler)
+        self.application = application
+
+    def server_close(self) -> None:
+        self.application.close()
+        super().server_close()
 
 
 def create_http_server(
@@ -97,9 +119,7 @@ def create_http_server(
     """Create an HTTP server bound to one middleware application."""
 
     handler = _make_request_handler(application)
-    server = ThreadingHTTPServer((host, port), handler)
-    server.application = application  # type: ignore[attr-defined]
-    return server
+    return MiddlewareHTTPServer((host, port), handler, application)
 
 
 def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRequestHandler]:
@@ -327,6 +347,7 @@ def main() -> None:
     finally:
         server.shutdown()
         server.server_close()
+        application.close()
 
 
 if __name__ == "__main__":
