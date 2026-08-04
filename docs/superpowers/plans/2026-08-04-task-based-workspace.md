@@ -452,7 +452,7 @@ node --check frontend/interaction-view.js
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit the routing and markup**
+- [x] **Step 7: Commit the routing and markup**
 
 ```bash
 git add frontend/app.js frontend/index.html tests/test_frontend_static.py
@@ -471,7 +471,7 @@ git commit -m "feat: route responses into task cards"
 - Consumes: Task 3 card class names and Task 4 `task-list` markup.
 - Produces: readable collapsible cards with preserved large controls, responsive behavior and documentation that describes task cards rather than raw tool events.
 
-- [ ] **Step 1: Add task-list/card styles**
+- [x] **Step 1: Add task-list/card styles**
 
 Add styles for the new card hierarchy:
 
@@ -531,7 +531,7 @@ Add styles for the new card hierarchy:
 
 Reuse existing `.task-summary`, `.task-steps`, `.task-content`, `.summary-card`, `.action-list`, focus and mobile rules inside the card body. Add a mobile rule that changes `.task-card-summary` to one column below 640px.
 
-- [ ] **Step 2: Update the frontend README**
+- [x] **Step 2: Update the frontend README**
 
 Replace the current workspace bullet with text explaining:
 
@@ -541,11 +541,11 @@ Middleware response 會以獨立任務卡顯示；進行中的任務展開顯示
 
 Keep startup, speech behavior, action contract and zero-build instructions accurate.
 
-- [ ] **Step 3: Update the root README workflow description**
+- [x] **Step 3: Update the root README workflow description**
 
 Change the medical query acceptance paragraph from “看到 tool event” to “看到完成的查詢任務卡和預約摘要”。Update the booking paragraph to mention that the active task shows visible steps and that completed tasks remain collapsed in the workspace. Add one architecture sentence under the frontend layer: “Frontend Task Workspace 管理目前頁面的任務卡歷史；Workflow／middleware 管理實際 task state。”
 
-- [ ] **Step 4: Run documentation and style contracts**
+- [x] **Step 4: Run documentation and style contracts**
 
 Run:
 

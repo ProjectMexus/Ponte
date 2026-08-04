@@ -27,7 +27,7 @@ MCP/                     固定 tool registry + REST adapter
 mock_backends/           One Account / Medical / Social Welfare
 ```
 
-各層的責任是分開的：LLM 或 intent recognizer 不直接寫入 backend；流程、確認及 tool permission 由 middleware／workflow layer 控制；MCP 只負責受控的工具接入；mock backend 只模擬下游服務。
+各層的責任是分開的：Frontend Task Workspace 管理目前頁面的任務卡歷史；LLM 或 intent recognizer 不直接寫入 backend；流程、確認及 tool permission 由 middleware／workflow layer 控制；MCP 只負責受控的工具接入；mock backend 只模擬下游服務。
 
 ## 快速開始
 
@@ -53,7 +53,7 @@ Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio serv
 我想查詢自己的醫療預約
 ```
 
-成功時畫面會顯示 middleware 已連線、完成狀態，以及只讀的 `medical.get_my_appointments` tool event；這個查詢不會載入服務、不會搜尋時段，也不會建立預約。
+成功時畫面會顯示 middleware 已連線、完成的查詢任務卡，以及每筆預約的服務、日期／時間、地點和狀態；這個查詢不會載入服務、不會搜尋時段，也不會建立預約。
 
 要測試醫療預約流程，輸入：
 
@@ -61,7 +61,7 @@ Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio serv
 我想預約醫療服務
 ```
 
-前端會先取得可預約服務；選擇服務及日期範圍後，middleware 會呼叫 `medical.search_appointment_slots` 並返回可預約時段。選擇時段並明確確認後，mock backend 才會建立預約記錄。完成後再次輸入「我想查詢自己的醫療預約」，即可從 mock backend 讀回剛建立的預約。按 `Ctrl-C` 會關閉整個 stack。
+前端會建立一張進行中的預約任務卡，先取得可預約服務；選擇服務及日期範圍後，middleware 會返回可預約時段。選擇時段並明確確認後，mock backend 才會建立預約記錄，完成的任務卡會收合但仍可重新展開。完成後再次輸入「我想查詢自己的醫療預約」，即可建立新的查詢任務並從 mock backend 讀回剛建立的預約。按 `Ctrl-C` 會關閉整個 stack。
 
 也可以在前端輸入以下兩個只讀需求，直接測試 middleware → MCP → mock backend 的完整路徑：
 
@@ -71,7 +71,7 @@ Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio serv
 ```
 
 前者會呼叫 `one_account.get_cash_sharing_plan`，後者會呼叫
-`one_account.search_elderly_activities`；回應資料會顯示在同一個服務工作區。
+`one_account.search_elderly_activities`；每個需求會以獨立任務卡顯示在服務工作區。
 
 若要逐一測試固定 registry 的 MCP tools，可在同一個文字框輸入：
 
