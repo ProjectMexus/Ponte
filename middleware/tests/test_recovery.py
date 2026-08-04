@@ -44,6 +44,17 @@ class RecoveryPolicyTests(unittest.TestCase):
             {"retry", "cancel", "human_help"},
         )
 
+    def test_retryable_backend_error_preserves_reason_code(self):
+        plan = build_recovery_plan(
+            error={"code": "BACKEND_UNAVAILABLE"},
+            step_id="load_services",
+            workflow="medical_booking",
+            data={},
+            result_data=None,
+            retryable=True,
+        )
+        self.assertEqual(plan.reason_code, "BACKEND_UNAVAILABLE")
+
     def test_invalid_response_is_hard_failure(self):
         plan = build_recovery_plan(
             error={"code": "BACKEND_INVALID_RESPONSE"},

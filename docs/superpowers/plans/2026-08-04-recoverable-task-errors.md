@@ -233,7 +233,7 @@ git commit -m "feat: add task manager contracts and transitions"
 - Consumes: `RecoveryPlan`, `RecoveryField`, `RecoveryOption`, canonical tool error mappings and workflow data.
 - Produces: `TaskRecoveryInterpreter` protocol, `DeterministicTaskRecoveryInterpreter`, `build_recovery_plan(error, step_id, workflow, data, result_data, retryable) -> RecoveryPlan | None`, and `is_hard_failure(error) -> bool`.
 
-- [ ] **Step 1: Add canonical reason-code and user-label maps**
+- [x] **Step 1: Add canonical reason-code and user-label maps**
 
 Implement allowlists for:
 
@@ -257,7 +257,7 @@ _RECOVERABLE_CODES = {
 
 Unknown field names must use the generic label `必要資料`; never copy an arbitrary backend field name into user-facing text.
 
-- [ ] **Step 2: Define the separate Task Recovery LLM interface**
+- [x] **Step 2: Define the separate Task Recovery LLM interface**
 
 Create `middleware/task_manager/interpreter.py` with an interface intentionally independent from `middleware/intent.py`:
 
@@ -282,19 +282,19 @@ class DeterministicTaskRecoveryInterpreter:
 
 The protocol must not import or call `IntentRecognizer`. A future LLM implementation receives only sanitized failure/result context, cannot receive authorization, patient context, raw tool arguments or unapproved backend details, and must validate model output as a `RecoveryPlan` before the manager uses it.
 
-- [ ] **Step 3: Implement missing-data recovery**
+- [x] **Step 3: Implement missing-data recovery**
 
 For `MISSING_REQUIRED_FIELD`, read only `details.field` or `details.fields` when they are strings from the allowlist; construct `RecoveryField` values and return category `missing_information`. Provide `human_help` and `cancel` options, with explanation `服務中心需要補充資料才能繼續。` when no safer backend text exists.
 
-- [ ] **Step 4: Implement availability recovery**
+- [x] **Step 4: Implement availability recovery**
 
 For `step_id == "search_slots"` and `result_data == []`, return `NO_AVAILABLE_SLOTS` with category `availability`, a retry option and a cancel option. When `error.details.alternatives` or `error.details.available_slots` is a list of mappings, extract only `start`, `end`, `service_name`/`service_display`, `service_id`, and `slot_id`; create user-friendly `select_slot` or `search_slots` options without exposing IDs in labels. Keep payload IDs because the action endpoint needs them.
 
-- [ ] **Step 5: Implement retryable and hard-failure mappings**
+- [x] **Step 5: Implement retryable and hard-failure mappings**
 
 For a retryable backend error, return category `temporary_failure` with `retry`, `cancel`, and `human_help` options only when the failed step was safe for retry. For non-retryable create/submit failures, return `None` so the manager marks the task failed. Treat `BACKEND_INVALID_RESPONSE`, `UNKNOWN_TOOL`, permission errors and schema errors as hard failures.
 
-- [ ] **Step 6: Run policy and interpreter separation tests**
+- [x] **Step 6: Run policy and interpreter separation tests**
 
 Run:
 
@@ -304,7 +304,7 @@ python -m unittest middleware.tests.test_recovery -v
 
 Add assertions that the deterministic interpreter returns the policy fallback, its module does not import `middleware.intent`, and no plan explanation, label or option label contains `REQ-`, `TOOL`, `LOC-`, `FHIR`, or a raw JSON fragment.
 
-- [ ] **Step 7: Commit the recovery interpreter boundary and policy**
+- [x] **Step 7: Commit the recovery interpreter boundary and policy**
 
 ```powershell
 git add middleware/task_manager/recovery.py middleware/task_manager/interpreter.py middleware/tests/test_recovery.py
