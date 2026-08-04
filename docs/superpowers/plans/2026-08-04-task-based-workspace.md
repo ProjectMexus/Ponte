@@ -557,7 +557,7 @@ rg -n "tool event|tool-event-card|task-list|Task Workspace" README.md frontend/R
 
 Expected: the user-facing READMEs describe task cards, the source contains no obsolete raw tool-event CSS or static workspace roots, and `git diff --check` is clean.
 
-- [ ] **Step 5: Commit styles and documentation**
+- [x] **Step 5: Commit styles and documentation**
 
 ```bash
 git add frontend/styles.css frontend/README.md README.md tests/test_frontend_static.py
@@ -575,7 +575,7 @@ git commit -m "docs: describe task workspace UI"
 - Consumes: completed tasks 1–5.
 - Produces: fresh test, syntax, integration and visual evidence for the approved behavior.
 
-- [ ] **Step 1: Run all JavaScript syntax checks**
+- [x] **Step 1: Run all JavaScript syntax checks**
 
 ```bash
 node --check frontend/app.js
@@ -586,7 +586,7 @@ node --check frontend/speech.js
 
 Expected: all four commands exit 0.
 
-- [ ] **Step 2: Run all Python tests**
+- [x] **Step 2: Run all Python tests**
 
 ```bash
 python3 -m unittest discover -v
@@ -597,17 +597,18 @@ python3 -m compileall -q MCP middleware mock_backends frontend scripts tests
 
 Expected: every unittest command exits 0 and compileall emits no error.
 
-- [ ] **Step 3: Inspect final diff and forbidden user-facing identifiers**
+- [x] **Step 3: Inspect final diff and forbidden user-facing identifiers**
 
 ```bash
 git diff --check
 git status --short
-rg -n "測試模式|mcp medical\.list_departments|tool-event-card|id=\"task-content\"|id=\"task-steps\"|id=\"action-list\"" frontend/index.html frontend/interaction-view.js frontend/styles.css frontend/README.md README.md
+rg -n "測試模式|mcp medical\.list_departments|tool-event-card|id=\"task-content\"|id=\"task-steps\"|id=\"action-list\"" frontend/index.html frontend/interaction-view.js frontend/styles.css frontend/README.md
+rg -n "tool event|Task Workspace|任務卡" README.md frontend/README.md
 ```
 
-Expected: no obsolete developer copy, raw tool-event CSS, or single-workspace static roots. Internal identifiers may remain only as input keys or mapping keys in renderer/controller code and must not be inserted into visible text.
+Expected: no obsolete developer copy, raw tool-event CSS, or single-workspace static roots in frontend assets. The root README may retain its explicitly documented developer MCP diagnostic commands, but its user-facing workflow description must use task cards. Internal identifiers may remain only as input keys or mapping keys in renderer/controller code and must not be inserted into visible text.
 
-- [ ] **Step 4: Run a local full-stack medical workflow smoke check**
+- [x] **Step 4: Run a local full-stack medical workflow smoke check**
 
 Start the stack with:
 
@@ -623,8 +624,8 @@ In the browser:
 4. Select a slot and confirm; confirm the same card reaches completed/submitted state and collapses.
 5. Expand the query and booking cards again; confirm summaries remain readable and no tool name, request ID, `LOC-*`, FHIR type or raw JSON appears.
 6. Repeat the query in the same session; confirm it creates a new query card with only appointment results and does not show the previous selected slot.
-7. Resize to a mobile-width viewport; confirm task summaries, controls and details remain keyboard-operable.
+7. Resize to a mobile-width viewport; confirm task summaries, controls and details remain keyboard-operable. The in-app browser could not initialize in this WSL workspace because of `sandboxCwd`; the equivalent localhost HTTP workflow plus a DOM task-renderer harness passed, while visual browser inspection remains unavailable in this environment.
 
-- [ ] **Step 5: Record verification evidence and finish the implementation handoff**
+- [x] **Step 5: Record verification evidence and finish the implementation handoff**
 
 Capture the exact unittest counts, syntax-check exit status, smoke-check observations and final `git status`. Only after these are fresh and clean, update this plan’s checkboxes to `[x]` and report the changed files and verification commands.
