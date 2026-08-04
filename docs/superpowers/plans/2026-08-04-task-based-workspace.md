@@ -198,7 +198,7 @@ python3 -m unittest \
 
 Expected: PASS, including the new same-session stale-state assertions.
 
-- [ ] **Step 4: Commit the middleware reset**
+- [x] **Step 4: Commit the middleware reset**
 
 ```bash
 git add middleware/session.py middleware/controller.py middleware/tests/test_controller.py tests/test_middleware_integration.py
@@ -215,7 +215,7 @@ git commit -m "fix: reset middleware state for new tasks"
 - Consumes: middleware response `{task_state, current_step, steps, data, actions, error}` and Task 1 source contracts.
 - Produces: `startTask({channel,value,taskId})`, `updateTask(taskId,response)`, `continueTask(taskId,input)`, `toggleTask(taskId)`, `failTask(taskId,error)` and an internal `TaskRecord[]` renderer.
 
-- [ ] **Step 1: Add task labels and terminal-state helpers**
+- [x] **Step 1: Add task labels and terminal-state helpers**
 
 Keep the existing friendly `TASK_STATE_LABELS`, `STEP_STATUS_LABELS`, `LOCATION_LABELS`, `STEP_LABELS`, and `STATUS_LABELS`. Add:
 
@@ -239,7 +239,7 @@ function taskStatus(taskState) {
 
 Use a local ID format `UI-TASK-${sequence}` when no task ID is provided. Never render this ID to the user.
 
-- [ ] **Step 2: Extract medical query rendering before booking rendering**
+- [x] **Step 2: Extract medical query rendering before booking rendering**
 
 At the start of `renderMedicalData`, implement this branch before `selected_slot`, `slots`, or `services`:
 
@@ -267,7 +267,7 @@ At the start of `renderMedicalData`, implement this branch before `selected_slot
 
 Then keep booking order as selected slot, slots, services, and leave the generic allowlist renderer unchanged except for task-card container ownership.
 
-- [ ] **Step 3: Add TaskRecord storage and lifecycle methods**
+- [x] **Step 3: Add TaskRecord storage and lifecycle methods**
 
 Inside `createInteractionView`, add this JSDoc marker and task storage:
 
@@ -299,7 +299,7 @@ function startTask({ channel = "text", value = "", taskId = null } = {}) {
 
 Implement `updateTask(taskId, response)` to replace only that record’s response snapshot, task state, current step and status. Set `backendTaskId` from `response.task_id` when available. Open non-terminal tasks and close terminal tasks. Implement `continueTask(taskId, input)` to update the record’s channel/value, mark it running and open it without assuming the input came from a button. Implement `toggleTask(taskId)` by changing `expanded` and rerendering.
 
-- [ ] **Step 4: Render each task as an accessible native details card**
+- [x] **Step 4: Render each task as an accessible native details card**
 
 Implement `renderTaskList()` so every task creates:
 
@@ -321,7 +321,7 @@ Implement `renderTaskList()` so every task creates:
 
 Use the existing `renderSteps`, `renderData`, and `renderActions` functions against elements created inside each card. Pass `(action, task.localId)` to `onAction`; completed cards must not render interactive actions. The task title and teaser may use friendly text, but must never include backend IDs.
 
-- [ ] **Step 5: Preserve view-level error behavior while marking the task failed**
+- [x] **Step 5: Preserve view-level error behavior while marking the task failed**
 
 Add `failTask(taskId, error)` that updates the record with `task_state: "failed"`, an error response, and a closed card. Keep `renderError(error)` for the global alert. `clearError()` remains unchanged.
 
@@ -341,16 +341,24 @@ return {
 };
 ```
 
-- [ ] **Step 6: Run frontend focused contracts and syntax**
+- [x] **Step 6: Run renderer-focused contracts and syntax**
 
 Run:
 
 ```bash
-python3 -m unittest tests.test_frontend_static.FrontendStaticTests -v
+python3 -m unittest \
+  tests.test_frontend_static.FrontendStaticTests.test_view_module_exports_renderer \
+  tests.test_frontend_static.FrontendStaticTests.test_view_uses_friendly_service_workspace_fields \
+  tests.test_frontend_static.FrontendStaticTests.test_view_supports_task_workspace_lifecycle
+```
+
+Run the JavaScript syntax check separately because `node --check` is not a unittest target:
+
+```bash
 node --check frontend/interaction-view.js
 ```
 
-Expected: PASS for the task lifecycle contracts and existing friendly-renderer contracts.
+Expected: PASS for the task lifecycle contracts and existing friendly-renderer contracts. The full `tests.test_frontend_static` suite runs after Task 4 updates the HTML and app wiring.
 
 - [ ] **Step 7: Commit the task renderer**
 

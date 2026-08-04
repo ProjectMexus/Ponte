@@ -11,6 +11,44 @@ const TASK_STATE_LABELS = {
   human_handoff: "已準備轉交人工",
 };
 
+const TERMINAL_TASK_STATES = new Set([
+  "completed",
+  "cancelled",
+  "failed",
+  "error",
+  "human_handoff",
+]);
+
+function taskStatus(taskState) {
+  if (taskState === "completed") return "completed";
+  if (taskState === "cancelled") return "cancelled";
+  if (taskState === "human_handoff") return "human_handoff";
+  if (taskState === "failed" || taskState === "error") return "failed";
+  return "running";
+}
+
+function taskTitle(value) {
+  const text = String(value || "").trim();
+  if (/查詢|查询/.test(text) && /醫療|医疗|預約|预约/.test(text)) return "查詢醫療預約";
+  if (/預約|预约/.test(text) && /醫療|医疗/.test(text)) return "預約醫療服務";
+  if (/現金分享/.test(text)) return "查詢現金分享計劃";
+  if (/長者|长者/.test(text) && /活動|活动/.test(text)) return "查詢長者文娛活動";
+  return text ? text.slice(0, 40) : "公共服務需求";
+}
+
+function taskTeaser(task) {
+  const response = task.response || {};
+  const data = response.data && typeof response.data === "object" ? response.data : {};
+  const appointments = Array.isArray(data.appointments) ? data.appointments : [];
+  if (data.intent === "medical_query") {
+    return appointments.length ? `已查到 ${appointments.length} 個醫療預約` : "目前沒有已預約的醫療服務";
+  }
+  if (response.task_state === "completed") return "服務已完成";
+  if (response.task_state === "cancelled") return "這次服務已取消";
+  if (task.status === "failed") return "需要再試一次";
+  return TASK_STATE_LABELS[response.task_state] || "等待下一步操作";
+}
+
 const STEP_STATUS_LABELS = {
   completed: "已完成",
   current: "現在進行",
@@ -190,6 +228,26 @@ function renderMedicalData(container, data, response) {
   const selectedSlot = data.selected_slot && typeof data.selected_slot === "object" ? data.selected_slot : null;
   const slots = Array.isArray(data.slots) ? data.slots : [];
   const appointments = Array.isArray(data.appointments) ? data.appointments : [];
+
+  if (data.intent === "medical_query") {
+    if (appointments.length) {
+      appointments.forEach((appointment, index) => {
+        const card = createSummaryCard(
+          serviceName(appointment.service, services) || `醫療預約 ${index + 1}`,
+          [
+            { label: "日期", value: dateOnly(appointment.start) },
+            { label: "時間", value: timeRange(appointment) },
+            { label: "服務地點", value: locationLabel(appointment.location) },
+            { label: "狀態", value: STATUS_LABELS[appointment.status] || "已登記" },
+          ],
+        );
+        if (card) container.append(card);
+      });
+    } else {
+      container.append(createElement("div", "empty-workspace", "目前沒有已預約的醫療服務。"));
+    }
+    return;
+  }
 
   if (selectedSlot) {
     const title = response?.task_state === "completed" ? "預約已完成" : "請確認預約資料";
@@ -475,13 +533,15 @@ function renderActions(container, response, onAction) {
 export function createInteractionView({
   conversationRoot,
   healthRoot,
-  stepsRoot,
-  taskRoot,
-  actionsRoot,
+  taskListRoot,
   errorRoot,
-  stateRoot,
   onAction,
 }) {
+  /** @typedef {Object} TaskRecord */
+  const tasks = [];
+  let taskSequence = 0;
+  let activeTaskId = null;
+
   function appendMessage(role, text) {
     if (!text) return;
     const message = createElement("article", `message message-${role}`);
@@ -493,14 +553,139 @@ export function createInteractionView({
     conversationRoot.scrollTop = conversationRoot.scrollHeight;
   }
 
-  function renderResponse(response) {
-    if (response.assistant_message) appendMessage("assistant", response.assistant_message);
-    if (stateRoot) stateRoot.textContent = TASK_STATE_LABELS[response.task_state] || response.task_state || TASK_STATE_LABELS.idle;
-    renderSteps(stepsRoot, response.steps, response.current_step);
-    taskRoot.replaceChildren();
-    renderData(taskRoot, response.data, response);
-    renderActions(actionsRoot, response, onAction);
+  function findTask(taskId) {
+    return tasks.find((task) => task.localId === taskId || task.backendTaskId === taskId) || null;
+  }
+
+  function renderTaskList() {
+    taskListRoot.replaceChildren();
+    tasks.forEach((task) => {
+      const card = createElement("details");
+      card.className = `task-card is-${task.status}`;
+      card.open = Boolean(task.expanded);
+      card.addEventListener("toggle", () => {
+        task.expanded = card.open;
+      });
+
+      const summary = createElement("summary", "task-card-summary");
+      const response = task.response || {};
+      const statusLabel = TASK_STATE_LABELS[response.task_state] || "正在處理";
+      summary.append(
+        createElement("span", "task-card-title", task.title),
+        createElement("span", "task-card-state", statusLabel),
+        createElement("span", "task-card-teaser", taskTeaser(task)),
+      );
+      card.append(summary);
+
+      const body = createElement("div", "task-card-body");
+      const progress = createElement("div", "task-summary");
+      progress.append(
+        createElement("span", "task-summary-label", "目前進度"),
+        createElement("strong", "", statusLabel),
+      );
+      body.append(progress);
+
+      if (task.response) {
+        const steps = createElement("ol", "task-steps");
+        steps.setAttribute("aria-label", "服務流程");
+        renderSteps(steps, response.steps, response.current_step);
+        body.append(steps);
+
+        const data = createElement("div", "task-content");
+        renderData(data, response.data, response);
+        body.append(data);
+
+        if (response.error?.message) {
+          body.append(createElement("div", "alert alert-error", response.error.message));
+        }
+
+        const actions = createElement("div", "action-list");
+        actions.setAttribute("aria-label", "可以進行的操作");
+        if (!TERMINAL_TASK_STATES.has(response.task_state)) {
+          renderActions(actions, response, (action) => onAction(action, task.localId));
+        }
+        body.append(actions);
+      } else {
+        body.append(createElement("div", "empty-workspace", "正在準備服務資料…"));
+      }
+      card.append(body);
+      taskListRoot.append(card);
+    });
+  }
+
+  function startTask({ channel = "text", value = "", taskId = null } = {}) {
+    const localId = taskId || `UI-TASK-${++taskSequence}`;
+    tasks.forEach((task) => {
+      task.expanded = false;
+    });
+    tasks.push({
+      localId,
+      backendTaskId: null,
+      title: taskTitle(value),
+      channel,
+      value,
+      status: "running",
+      taskState: "querying",
+      currentStep: "welcome",
+      response: null,
+      expanded: true,
+    });
+    activeTaskId = localId;
+    renderTaskList();
+    return localId;
+  }
+
+  function updateTask(taskId, response) {
+    const task = findTask(taskId);
+    if (!task) return;
+    const nextResponse = response && typeof response === "object" ? response : {};
+    task.response = nextResponse;
+    task.taskState = nextResponse.task_state || "querying";
+    task.currentStep = nextResponse.current_step || "welcome";
+    task.status = taskStatus(task.taskState);
+    task.backendTaskId = typeof nextResponse.task_id === "string" ? nextResponse.task_id : task.backendTaskId;
+    task.expanded = !TERMINAL_TASK_STATES.has(task.taskState);
+    if (nextResponse.assistant_message) appendMessage("assistant", nextResponse.assistant_message);
     clearError();
+    renderTaskList();
+  }
+
+  function continueTask(taskId, input = {}) {
+    const task = findTask(taskId);
+    if (!task) return false;
+    task.channel = input.channel || task.channel;
+    task.value = input.value ?? task.value;
+    task.status = "running";
+    task.expanded = true;
+    activeTaskId = task.localId;
+    renderTaskList();
+    return true;
+  }
+
+  function toggleTask(taskId) {
+    const task = findTask(taskId);
+    if (!task) return false;
+    task.expanded = !task.expanded;
+    renderTaskList();
+    return task.expanded;
+  }
+
+  function failTask(taskId, error) {
+    const task = findTask(taskId);
+    if (!task) return;
+    task.status = "failed";
+    task.taskState = "failed";
+    task.expanded = false;
+    task.response = {
+      ...(task.response || {}),
+      task_state: "failed",
+      current_step: task.currentStep,
+      steps: task.response?.steps || [],
+      data: task.response?.data || {},
+      actions: [],
+      error: { message: error?.message || "暫時未能完成這一步，你可以再試一次。" },
+    };
+    renderTaskList();
   }
 
   function renderHealth(payload) {
@@ -526,7 +711,11 @@ export function createInteractionView({
 
   return {
     appendUserMessage: (text) => appendMessage("user", text),
-    renderResponse,
+    startTask,
+    updateTask,
+    continueTask,
+    toggleTask,
+    failTask,
     renderHealth,
     renderError,
     clearError,
