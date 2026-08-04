@@ -46,9 +46,12 @@ class FrontendStaticTests(unittest.TestCase):
             self.assertIn(token, html)
         self.assertIn('lang="zh-Hant"', html)
 
-    def test_index_advertises_mcp_diagnostic_command(self):
+    def test_index_hides_developer_only_diagnostics(self):
         html = Path("frontend/index.html").read_text(encoding="utf-8")
-        self.assertIn("mcp medical.list_departments {}", html)
+        self.assertNotIn('class="mode-badge"', html)
+        self.assertNotIn("mcp medical.list_departments {}", html)
+        self.assertIn('id="speech-status"', html)
+        self.assertIn('id="action-list"', html)
 
     def test_frontend_supports_diagnostic_confirmation_action(self):
         self.assertIn(
@@ -95,8 +98,29 @@ class FrontendStaticTests(unittest.TestCase):
     def test_view_module_exports_renderer(self):
         js = Path("frontend/interaction-view.js").read_text(encoding="utf-8")
         self.assertIn("createInteractionView", js)
-        self.assertIn("tool_events", js)
+        self.assertIn("renderMedicalData", js)
         self.assertIn("actions", js)
+
+    def test_view_uses_friendly_service_workspace_fields(self):
+        source = Path("frontend/interaction-view.js").read_text(encoding="utf-8")
+        for marker in (
+            "LOCATION_LABELS",
+            "LOC-REHAB-01",
+            "復康治療室",
+            "STEP_LABELS",
+            "renderMedicalData",
+            "所需時間",
+            "服務地點",
+        ):
+            self.assertIn(marker, source)
+        self.assertNotIn("renderToolEvents", source)
+        self.assertNotIn("tool-event-card", source)
+        self.assertNotIn("request_id", source)
+
+    def test_styles_prioritize_summary_cards(self):
+        css = Path("frontend/styles.css").read_text(encoding="utf-8")
+        self.assertIn(".summary-card", css)
+        self.assertNotIn(".tool-event-card", css)
 
     def test_view_module_supports_medical_booking_action_contract(self):
         source = Path("frontend/interaction-view.js").read_text(encoding="utf-8")
