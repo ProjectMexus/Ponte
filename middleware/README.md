@@ -116,7 +116,7 @@ Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_UR
 
 `source` 可為 `text` 或 `voice`。醫療意圖分為兩條流程：輸入「我想查詢自己的醫療預約」只會呼叫 `medical.get_my_appointments`，返回自己的預約記錄並完成，不會搜尋服務或改變 mock state；輸入「我想預約醫療服務」才會初始化服務選擇。所有 workflow 都會回傳 `task_state`、`current_step`、`steps`、`tool_events`、`actions` 和 `data`。
 
-預約流程會先返回可預約服務。前端選擇服務和日期範圍後，透過 `search_slots` 呼叫 `medical.search_appointment_slots`；可預約時段會出現在回應的 `data.slots`。選擇一個時段後，只有再收到明確的 `confirm` action，middleware 才會呼叫 `medical.create_appointment` 並將記錄寫入 mock backend。之後用「我想查詢自己的醫療預約」即可讀回該記錄。
+預約流程會先返回真正仍有名額的服務；`medical.list_appointment_services` 預設以 mock backend 的 appointment slot 剩餘容量過濾，不只依賴 active service catalog。前端選擇服務和日期範圍後，透過 `search_slots` 呼叫 `medical.search_appointment_slots`；可預約時段會出現在回應的 `data.slots`。選擇一個時段後，只有再收到明確的 `confirm` action，middleware 才會呼叫 `medical.create_appointment` 並將記錄寫入 mock backend。若時段在查詢後被其他人搶走，backend 會返回 `SLOT_NOT_AVAILABLE`，同一 task 會進入 Task Recovery，提供重新搜尋其他時段的方案。之後用「我想查詢自己的醫療預約」即可讀回該記錄。
 
 可直接輸入以下訊息測試自然語言 workflow：
 

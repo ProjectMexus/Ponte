@@ -137,6 +137,13 @@ class RegistryTests(unittest.TestCase):
         )
         self.assertEqual(medical.body_mode, "json")
 
+        services = self.registry.get("medical.list_appointment_services")
+        self.assertIn(
+            "available_only",
+            services.input_schema["properties"]["input"]["properties"],
+        )
+        self.assertIn("available_only", services.query_fields)
+
     def test_context_schema_is_allowlisted(self):
         definition = self.registry.get("medical.list_departments")
         context_schema = definition.input_schema["properties"]["context"]

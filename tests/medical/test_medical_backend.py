@@ -150,6 +150,24 @@ class MedicalBackendTests(unittest.TestCase):
         self.assertEqual(response.status, 422)
         self.assertEqual(response.body["error"]["code"], "REFERRAL_REQUIRED")
 
+    def test_appointment_services_hide_full_services_but_keep_available_services(self):
+        for index in range(2):
+            self.service.appointment_repository.insert({
+                "id": f"APT-PT-FULL-{index}",
+                "patient_id": f"P-OTHER-{index}",
+                "slot_id": "SLOT-PT-20260813-1000",
+                "status": "confirmed",
+            })
+
+        services = self.backend.handle(
+            self.medical_request("GET", "/appointment-services", patient=None)
+        )
+
+        self.assertEqual(services.status, 200)
+        service_ids = {item["id"] for item in services.body["data"]}
+        self.assertNotIn("SERVICE-PT-001", service_ids)
+        self.assertIn("SERVICE-US-001", service_ids)
+
     def test_appointment_create_list_detail_and_task_do_not_leak_patient_data(self):
         created = self.backend.handle(
             self.medical_request("POST", "/appointments", body=self.appointment_body(), **{"Idempotency-Key": "APT-1"})
@@ -181,6 +199,40 @@ class MedicalBackendTests(unittest.TestCase):
         )
         self.assertEqual(first.status, 409)
         self.assertEqual(first.body["error"]["code"], "SLOT_NOT_AVAILABLE")
+
+    def test_appointment_slot_can_be_taken_between_search_and_create(self):
+        searched = self.backend.handle(
+            self.medical_request(
+                "GET",
+                "/appointment-slots",
+                query={
+                    "service_id": ["SERVICE-US-001"],
+                    "date_from": ["2026-08-10"],
+                    "date_to": ["2026-08-14"],
+                },
+            )
+        )
+        self.assertEqual(searched.status, 200)
+        self.assertEqual(searched.body["data"][0]["remaining"], 1)
+
+        self.service.appointment_repository.insert({
+            "id": "APT-OTHER-US-001",
+            "patient_id": "P-OTHER",
+            "slot_id": "SLOT-US-20260812-1400",
+            "status": "confirmed",
+        })
+
+        created = self.backend.handle(
+            self.medical_request(
+                "POST",
+                "/appointments",
+                body=self.appointment_body(),
+                **{"Idempotency-Key": "APT-RACE-1"},
+            )
+        )
+
+        self.assertEqual(created.status, 409)
+        self.assertEqual(created.body["error"]["code"], "SLOT_NOT_AVAILABLE")
 
 
 if __name__ == "__main__":

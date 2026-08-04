@@ -123,7 +123,11 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
             f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/message",
             {"session_id": "S-2", "message": "我想預約醫療服務", "source": "text"},
         )
-        service_id_2 = cancelled["data"]["services"][1]["id"]
+        self.assertEqual(
+            [service["id"] for service in cancelled["data"]["services"]],
+            ["SERVICE-PT-001"],
+        )
+        service_id_2 = cancelled["data"]["services"][0]["id"]
         cancelled = post_json(
             self.opener,
             f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/action",

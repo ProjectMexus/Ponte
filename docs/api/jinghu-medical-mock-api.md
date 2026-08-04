@@ -436,6 +436,9 @@ Query parameters：
 | `type` | 否 | enum | `examination` 或 `treatment`。 |
 | `keyword` | 否 | string | 搜尋服務名稱。 |
 | `active_only` | 否 | boolean | 預設 `true`。 |
+| `available_only` | 否 | boolean | 預設 `true`；只返回 booking window 內至少有一個 `remaining > 0` 可預約時段的服務。設為 `false` 才返回完整 active catalog。 |
+
+`available_only=true` 是預約 workflow 的預設 contract。服務 catalog 不代表當下可預約名額；mock backend 會逐一檢查該服務的 appointment slots 及已建立預約所消耗的容量，再決定是否保留服務。即使服務出現在此列表，使用者選定日期後仍必須再次呼叫 `/appointment-slots`，因為時段可能在查詢後被其他使用者搶走。
 
 `200 OK`：
 

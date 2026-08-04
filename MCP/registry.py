@@ -327,9 +327,9 @@ def build_registry() -> ToolRegistry:
             "查詢可預約的檢查／治療服務。",
             "GET",
             "/mock/medical/v1/appointment-services",
-            _envelope_schema({"department_id": _string(), "service_type": _string(), "keyword": _string(), "active_only": _boolean()}),
+            _envelope_schema({"department_id": _string(), "service_type": _string(), "keyword": _string(), "active_only": _boolean(), "available_only": _boolean()}),
             _medical_context(),
-            query_fields=("department_id", "service_type", "keyword", "active_only"),
+            query_fields=("department_id", "service_type", "keyword", "active_only", "available_only"),
         ),
         ToolDefinition(
             "medical.search_appointment_slots",

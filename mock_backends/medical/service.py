@@ -233,8 +233,35 @@ class MedicalService:
         service_type = self._value(query, "type")
         keyword = self._value(query, "keyword").casefold()
         active_only = self._value(query, "active_only", "true").lower() != "false"
-        result = [item for item in appointment_services() if (not active_only or item["active"]) and (not department_id or item["department_id"] == department_id) and (not service_type or item["type"] == service_type) and (not keyword or keyword in f"{item['name']} {item['name_en']}".casefold())]
+        available_only = self._value(query, "available_only", "true").lower() != "false"
+        result = []
+        for item in appointment_services():
+            if active_only and not item["active"]:
+                continue
+            if department_id and item["department_id"] != department_id:
+                continue
+            if service_type and item["type"] != service_type:
+                continue
+            if keyword and keyword not in f"{item['name']} {item['name_en']}".casefold():
+                continue
+            if available_only and not self._has_available_appointment_slot(item["id"]):
+                continue
+            result.append(item)
         return self._response(request_id, 200, result, {"total": len(result)})
+
+    def _has_available_appointment_slot(self, service_id: str) -> bool:
+        today = self.clock.now().date()
+        latest = today + timedelta(days=14)
+        for base in appointment_slots():
+            item = self._appointment_slot(base["id"])
+            slot_date = date.fromisoformat(item["start"][:10])
+            if (
+                item["service_id"] == service_id
+                and today <= slot_date <= latest
+                and item["remaining"] > 0
+            ):
+                return True
+        return False
 
     def _service(self, service_id: str) -> dict[str, Any]:
         for item in appointment_services():
