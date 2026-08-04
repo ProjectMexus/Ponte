@@ -40,11 +40,16 @@ class FrontendStaticTests(unittest.TestCase):
             'id="message-input"',
             'id="mic-button"',
             'id="speak-stop-button"',
-            'id="task-steps"',
-            'id="action-list"',
+            'id="task-list"',
         ):
             self.assertIn(token, html)
         self.assertIn('lang="zh-Hant"', html)
+
+    def test_index_exposes_task_workspace_root(self):
+        html = Path("frontend/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="task-list"', html)
+        self.assertIn('aria-label="服務任務"', html)
+        self.assertNotIn('id="task-content"', html)
 
     def test_index_hides_developer_only_diagnostics(self):
         html = Path("frontend/index.html").read_text(encoding="utf-8")
@@ -100,6 +105,29 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("createInteractionView", js)
         self.assertIn("renderMedicalData", js)
         self.assertIn("actions", js)
+
+    def test_view_supports_task_workspace_lifecycle(self):
+        source = Path("frontend/interaction-view.js").read_text(encoding="utf-8")
+        for marker in (
+            "TaskRecord",
+            "startTask",
+            "updateTask",
+            "continueTask",
+            "toggleTask",
+            "task-card",
+            'createElement("details")',
+            "medical_query",
+            "appointments",
+        ):
+            self.assertIn(marker, source)
+        self.assertNotIn("taskRoot.replaceChildren()", source)
+
+    def test_app_routes_message_and_action_to_task_ids(self):
+        source = Path("frontend/app.js").read_text(encoding="utf-8")
+        self.assertIn("startTask", source)
+        self.assertIn("updateTask", source)
+        self.assertIn("continueTask", source)
+        self.assertIn("taskId", source)
 
     def test_view_uses_friendly_service_workspace_fields(self):
         source = Path("frontend/interaction-view.js").read_text(encoding="utf-8")

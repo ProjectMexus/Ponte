@@ -36,7 +36,7 @@
 - Consumes: current static frontend assets and `InteractionController` response shape.
 - Produces: failing regression tests for `task-list`, `startTask`／`updateTask`／`continueTask`, same-session stale-state cleanup, and action-chain preservation.
 
-- [ ] **Step 1: Replace single-workspace HTML assertions with task-list assertions**
+- [x] **Step 1: Replace single-workspace HTML assertions with task-list assertions**
 
 Update `FrontendStaticTests.test_index_has_required_landmarks_and_controls` so it requires `id="task-list"` and no longer requires static `task-steps`, `task-content`, or `action-list` roots. Keep the existing conversation, speech, input and focus landmark assertions.
 
@@ -50,7 +50,7 @@ Add a test with this exact contract:
         self.assertNotIn('id="task-content"', html)
 ```
 
-- [ ] **Step 2: Add frontend task lifecycle source contracts**
+- [x] **Step 2: Add frontend task lifecycle source contracts**
 
 Add `test_view_supports_task_workspace_lifecycle` to `tests/test_frontend_static.py`:
 
@@ -83,7 +83,7 @@ Add `test_app_routes_message_and_action_to_task_ids`:
         self.assertIn("taskId", source)
 ```
 
-- [ ] **Step 3: Add the stale workflow state unit test**
+- [x] **Step 3: Add the stale workflow state unit test**
 
 Add this test to `middleware/tests/test_controller.py`:
 
@@ -110,7 +110,7 @@ Add this test to `middleware/tests/test_controller.py`:
         self.assertEqual([event["tool_name"] for event in query["tool_events"]], ["medical.get_my_appointments"])
 ```
 
-- [ ] **Step 4: Make the integration query reuse the booking session**
+- [x] **Step 4: Make the integration query reuse the booking session**
 
 In `tests/test_middleware_integration.py::test_message_to_medical_tool_reaches_mock_backend`, change the post-booking query session from `S-QUERY-AFTER-BOOKING` to `S-1`, then assert:
 
@@ -123,7 +123,7 @@ In `tests/test_middleware_integration.py::test_message_to_medical_tool_reaches_m
         )
 ```
 
-- [ ] **Step 5: Run the focused contracts and confirm the red state**
+- [x] **Step 5: Run the focused contracts and confirm the red state**
 
 Run:
 

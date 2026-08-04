@@ -100,6 +100,30 @@ class ControllerTests(unittest.TestCase):
             "medical.list_appointment_services",
         ])
 
+    def test_new_message_resets_previous_workflow_data(self):
+        self.controller.handle_message(InteractionRequest("S-REUSE", "我想預約醫療服務"))
+        self.controller.handle_action(InteractionActionRequest("S-REUSE", "search_slots", {
+            "service_id": "SERVICE-US-001",
+            "date_from": "2026-08-10",
+            "date_to": "2026-08-14",
+        }))
+        self.controller.handle_action(InteractionActionRequest("S-REUSE", "select_slot", {
+            "slot_id": "SLOT-US-20260812-1400",
+        }))
+
+        query = self.controller.handle_message(
+            InteractionRequest("S-REUSE", "我想查詢自己的醫療預約")
+        )
+
+        self.assertEqual(query["data"]["appointments"], [])
+        for stale_key in ("services", "slots", "selected_slot", "service_id", "slot_id"):
+            self.assertNotIn(stale_key, query["data"])
+        self.assertEqual([step["step_id"] for step in query["steps"]], ["load_appointments"])
+        self.assertEqual(
+            [event["tool_name"] for event in query["tool_events"]],
+            ["medical.get_my_appointments"],
+        )
+
     def test_cash_sharing_message_calls_one_account_tool(self):
         response = self.controller.handle_message(
             InteractionRequest("S-CASH", "我想查現金分享計劃")

@@ -103,7 +103,7 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
             self.opener,
             f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/message",
             {
-                "session_id": "S-QUERY-AFTER-BOOKING",
+                "session_id": "S-1",
                 "message": "我想查詢自己的醫療預約",
                 "source": "text",
             },
@@ -113,6 +113,8 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
             [event["tool_name"] for event in queried["tool_events"]],
             ["medical.get_my_appointments"],
         )
+        self.assertNotIn("selected_slot", queried["data"])
+        self.assertNotIn("slots", queried["data"])
         self.assertIn(appointment_id, [item["id"] for item in queried["data"]["appointments"]])
 
         cancelled = post_json(
