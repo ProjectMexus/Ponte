@@ -434,7 +434,7 @@ python3 -m unittest middleware.tests.test_controller middleware.tests.test_serve
 
 Expected: PASS; the frontend still exposes only middleware client code and POST confirmation remains enforced.
 
-- [ ] Step 7: Commit feature 2
+- [x] Step 7: Commit feature 2
 
 Review git diff and stage only parser, diagnostic integration, frontend help and tests:
 
@@ -517,7 +517,7 @@ python3 -m unittest tests.test_full_stack_integration tests.test_middleware_inte
 
 Trace failures at the actual boundary: request shape, middleware parsing/context, MCP protocol, REST adapter mapping, or backend contract. Make one minimal root-cause change at a time and rerun the smallest failing test before the full pair.
 
-- [ ] Step 4: Run complete verification
+- [x] Step 4: Run complete verification
 
 Run:
 
@@ -533,7 +533,7 @@ node --check frontend/interaction-view.js
 
 Expected: every command exits 0 with no failing tests or compile errors.
 
-- [ ] Step 5: Perform browser/manual smoke verification
+- [x] Step 5: Perform browser/manual smoke verification
 
 Start:
 
@@ -551,6 +551,8 @@ Open the printed frontend URL and verify:
 
 If in-app browser binding remains unavailable in this WSL environment, record that limitation and use the passing deterministic full-stack test as evidence; do not claim browser verification passed.
 
-- [ ] Step 6: Mark completed plan steps
+Verification note: the local stack runner reached ready state and was stopped cleanly, but the in-app browser runtime rejected the workspace sandbox URI file:///home/bill/tsinghua/Ponte. The deterministic full-stack tests passed; no browser visual claim is made.
+
+- [x] Step 6: Mark completed plan steps
 
 After reading complete test output and confirming the two feature commits contain only intended changes, change every completed checkbox in this plan to [x]. Record any environment-only browser limitation in the existing E2E plan.

@@ -353,7 +353,7 @@ Run:
 
 Expected: backend, middleware, MCP child, and frontend all report ready; the browser URL is http://127.0.0.1:5173.
 
-- [ ] Step 2: Execute the browser interaction
+- [x] Step 2: Execute the browser interaction
 
 Open the frontend URL in the in-app browser. Verify the connected health status, enter 我想查詢醫療預約 in #message-input, click #send-button, and wait for the response. Verify the visible page contains:
 
@@ -377,6 +377,6 @@ Run:
 
 Expected: all tests and compilation checks PASS, with no orphaned MCP process after the test run.
 
-- [ ] Step 4: Mark the completed plan steps
+- [x] Step 4: Mark the completed plan steps
 
 Change every completed Task 5 checkbox from [ ] to [x]. Record any environment-only limitation, such as a browser connection or localhost socket permission issue, explicitly instead of claiming the corresponding check passed.
