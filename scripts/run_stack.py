@@ -14,8 +14,11 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from middleware.config import load_dotenv
 
 
 @dataclass(frozen=True)
@@ -122,6 +125,8 @@ def run_stack(
     frontend_port: int = 5173,
     data_dir: str | Path | None = None,
 ) -> None:
+    load_dotenv()
+
     temporary_data: tempfile.TemporaryDirectory[str] | None = None
     if data_dir is None:
         temporary_data = tempfile.TemporaryDirectory(prefix="ponte-stack-")

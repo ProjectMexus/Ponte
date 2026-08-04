@@ -89,6 +89,22 @@ mcp one_account.search_elderly_activities {"available_only":true}
 python3 scripts/run_stack.py --data-dir data/mock
 ```
 
+### Terminal logging
+
+`run_stack.py` 會在啟動 backend、middleware/MCP 和 frontend 前載入本地 `.env`；shell 中已存在的同名變數優先。可用 `PONTE_LOG_LEVEL` 控制 terminal logging，預設建議使用 `INFO`：
+
+```bash
+PONTE_LOG_LEVEL=INFO python3 scripts/run_stack.py
+```
+
+輸出會使用 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component prefix，並只顯示安全 metadata，例如 method/path/status、model/endpoint metadata、message character counts、normalized intent、tool name/input keys、outcome 和 latency。提高 log level 也不會啟用 raw LLM content；完整 prompt/response、API key 或其他 credentials，以及 medical payload 都不會寫入 terminal。
+
+若已將 terminal output 保存為 `ponte-terminal.log`，可用以下篩選所有 component：
+
+```bash
+rg '\[(frontend|middleware|llm|mcp|backend)\]' ponte-terminal.log
+```
+
 ## 分開啟動各服務
 
 需要逐層除錯時，可在不同 terminal 依次執行：

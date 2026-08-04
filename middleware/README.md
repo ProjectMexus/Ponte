@@ -32,6 +32,22 @@ python3 scripts/run_stack.py
 
 這個 runner 會啟動 backend、middleware、middleware 管理的 MCP stdio server 和 frontend。瀏覽器輸入「我想查詢自己的醫療預約」後，應看到完成狀態、服務已連線，以及只讀的 `medical.get_my_appointments` tool event。輸入「我想預約醫療服務」則會進入服務選擇、日期範圍、可預約時段及確認流程；確認後可再用前一個查詢讀回 mock backend 的預約記錄。也可以輸入「我想查現金分享計劃」或「我想找長者文娛活動」測試只讀的一戶通／長者活動 workflow。
 
+## Terminal logging
+
+`run_stack.py` 會在啟動 child processes 前載入本地 `.env`，shell 中已存在的同名環境變數優先。可用以下設定啟動 safe-by-default 的 terminal logging：
+
+```bash
+PONTE_LOG_LEVEL=INFO python3 scripts/run_stack.py
+```
+
+輸出會使用 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component prefix，只顯示 method/path/status、model/endpoint metadata、message character counts、normalized intent、tool name/input keys、outcome 和 latency 等安全 metadata。提高 log level 也不會啟用 raw LLM content；完整 prompt/response、API key 或其他 credentials，以及 medical payload 都不會寫入 terminal。
+
+若已將 terminal output 保存為 `ponte-terminal.log`，可用以下篩選 component logs：
+
+```bash
+rg '\[(frontend|middleware|llm|mcp|backend)\]' ponte-terminal.log
+```
+
 檢查 middleware 和 backend：
 
 ```bash
