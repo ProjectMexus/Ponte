@@ -7,7 +7,6 @@ import os
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_DATA_DIR = PROJECT_ROOT / "database"
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -127,13 +127,8 @@ def run_stack(
 ) -> None:
     load_dotenv()
 
-    temporary_data: tempfile.TemporaryDirectory[str] | None = None
-    if data_dir is None:
-        temporary_data = tempfile.TemporaryDirectory(prefix="ponte-stack-")
-        data_path = Path(temporary_data.name)
-    else:
-        data_path = Path(data_dir).resolve()
-        data_path.mkdir(parents=True, exist_ok=True)
+    data_path = DEFAULT_DATA_DIR if data_dir is None else Path(data_dir).resolve()
+    data_path.mkdir(parents=True, exist_ok=True)
 
     commands = build_commands(
         sys.executable,
@@ -182,8 +177,6 @@ def run_stack(
     finally:
         for _, process in reversed(processes):
             stop_process(process)
-        if temporary_data is not None:
-            temporary_data.cleanup()
 
 
 def main() -> None:

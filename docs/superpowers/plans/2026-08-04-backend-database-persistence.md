@@ -84,7 +84,7 @@ python3 -m unittest tests.core.test_ids tests.core.test_persistence tests.core.t
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the core change**
+- [x] **Step 5: Commit the core change**
 
 ```bash
 git add mock_backends/core/ids.py tests/core/test_ids.py
@@ -104,7 +104,7 @@ git commit -m "feat: persist mock backend id sequences"
 - Consumes: `TextFileIdGenerator` from Task 1 and existing `JsonLinesTextRepository`.
 - Produces: `create_application(data_dir, clock=None)` using `data_dir/id_sequences.txt`; default CLI and runner data root equal to `Path(__file__).resolve().parents[1] / "database"`.
 
-- [ ] **Step 1: Write the failing default-path tests**
+- [x] **Step 1: Write the failing default-path tests**
 
 Extend `tests/test_run_stack.py` to import `DEFAULT_DATA_DIR` and assert:
 
@@ -115,7 +115,7 @@ def test_default_data_directory_is_repository_root_database(self):
 
 Add a test for `mock_backends.server.DEFAULT_DATA_DIR` with the same expected path. Keep the existing explicit `build_commands(..., data_dir=...)` assertion unchanged.
 
-- [ ] **Step 2: Run the focused runner tests and verify the default-path assertion fails**
+- [x] **Step 2: Run the focused runner tests and verify the default-path assertion fails**
 
 Run:
 
@@ -125,7 +125,7 @@ python3 -m unittest tests.test_run_stack -v
 
 Expected: FAIL because the two modules currently use `data/mock` or an ephemeral temporary directory and do not expose the repository-root default constant.
 
-- [ ] **Step 3: Implement production wiring and default paths**
+- [x] **Step 3: Implement production wiring and default paths**
 
 In `mock_backends/server.py`:
 
@@ -147,7 +147,7 @@ Create `database/.gitkeep` and a `database/.gitignore` containing:
 !/.gitkeep
 ```
 
-- [ ] **Step 4: Run the runner and core integration tests**
+- [x] **Step 4: Run the runner and core integration tests**
 
 Run:
 
@@ -157,7 +157,7 @@ python3 -m unittest tests.test_run_stack tests.core.test_ids tests.test_persiste
 
 Expected: PASS after Task 3 adds the medical restart coverage; before Task 3, the existing referral restart test must still pass.
 
-- [ ] **Step 5: Commit the startup wiring**
+- [x] **Step 5: Commit the startup wiring**
 
 ```bash
 git add mock_backends/server.py scripts/run_stack.py tests/test_run_stack.py database/.gitkeep database/.gitignore

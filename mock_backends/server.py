@@ -17,7 +17,7 @@ from mock_backends.core.contracts import Clock
 from mock_backends.core.errors import DomainError, error_payload
 from mock_backends.core.http import BackendRequest, BackendResponse
 from mock_backends.core.idempotency import RepositoryIdempotencyStore
-from mock_backends.core.ids import SequentialIdGenerator
+from mock_backends.core.ids import TextFileIdGenerator
 from mock_backends.core.persistence import JsonLinesTextRepository
 from mock_backends.medical.backend import MedicalBackend
 from mock_backends.medical.service import MedicalService
@@ -32,12 +32,14 @@ from ponte_logging import log_event
 
 
 _MIDDLEWARE_REQUEST_ID = re.compile(r"^REQ-MW-[0-9A-F]{12}$")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_DATA_DIR = PROJECT_ROOT / "database"
 
 
 def create_application(data_dir: str | Path, clock: Clock | None = None) -> MockRouter:
     root = Path(data_dir)
     active_clock = clock or AsiaMacauClock()
-    ids = SequentialIdGenerator()
+    ids = TextFileIdGenerator(JsonLinesTextRepository(root / "id_sequences.txt"))
 
     one_root = root / "one_account"
     one_service = OneAccountService(
@@ -222,7 +224,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run Ponte's One Account, Medical and Social Welfare mock backends.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8080, type=int)
-    parser.add_argument("--data-dir", default="data/mock")
+    parser.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
     args = parser.parse_args()
     run_server(args.host, args.port, args.data_dir)
 

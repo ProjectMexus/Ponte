@@ -4,10 +4,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.run_stack import build_commands, frontend_url, middleware_environment
+from mock_backends.server import DEFAULT_DATA_DIR as BACKEND_DEFAULT_DATA_DIR
+from scripts.run_stack import DEFAULT_DATA_DIR, build_commands, frontend_url, middleware_environment
 
 
 class RunStackTests(unittest.TestCase):
+    def test_default_data_directory_is_repository_root_database(self):
+        expected = Path(__file__).resolve().parents[1] / "database"
+        self.assertEqual(DEFAULT_DATA_DIR, expected)
+        self.assertEqual(BACKEND_DEFAULT_DATA_DIR, expected)
+
     def test_build_commands_uses_explicit_ports_and_data_directory(self):
         data_dir = Path("/tmp/ponte-run-stack")
         commands = build_commands(
