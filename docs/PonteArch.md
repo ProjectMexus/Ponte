@@ -172,6 +172,49 @@ Frontend Task Workspace
 
 Frontend 只負責任務歷史和用戶版投影；Workflow Orchestrator 仍負責流程順序、確認節點、工具權限和實際執行。新的高階需求開始時，middleware 會清理上一個 `SessionState` workflow 的 transient data、steps、tool events、retry call 和 confirmation record，但不會刪除已建立的 mock appointment、durable task 或 receipt。UI task history 與 durable backend task 是兩個互補層次：前者服務於本次對話的可理解工作區，後者負責業務狀態和長時間追蹤。
 
+## 3.2 Middleware Task Manager 與可恢復錯誤
+
+Frontend Task Workspace 只負責 task history 和用戶版投影；middleware 的 `Task Manager` 負責目前 session task 的狀態、工具結果接入、合法轉移及恢復方案。這個邊界避免 `InteractionController`、LLM adapter 或前端各自維護一套 task lifecycle。
+
+```text
+InteractionController
+  ├─ intent recognition
+  └─ workflow order
+          │
+          ▼
+middleware/task_manager/
+  ├─ contracts.py      Task state / RecoveryPlan contract
+  ├─ manager.py        lifecycle and tool-result integration
+  ├─ recovery.py       backend result → recovery policy
+  └─ transitions.py    allowed transitions / terminal states
+          │
+          ├──────────────► SessionState / SessionStore
+          └──────────────► ExecutionPipeline / ToolExecutionResult
+                              │
+                              ▼
+                         TaskResponse
+```
+
+Task Manager 保留 `SessionState` 作為目前 workflow 的 in-memory 容器，但成為修改 task lifecycle 的唯一入口。正常 workflow 由 `querying`、`selecting_service`、`selecting_slot` 和 `awaiting_confirmation` 轉移；工具或 backend 返回可處理的錯誤時，轉移到非終止的 `awaiting_user_input`。此狀態會保留原 task、steps 和已知資料，並附上 `RecoveryPlan`，讓前端說明缺少的資料、額滿原因、候選方案或重試方式。
+
+可恢復錯誤的 response 使用既有 `TaskResponse` 欄位，加上：
+
+```json
+{
+  "task_state": "awaiting_user_input",
+  "error": {"code": "NO_AVAILABLE_SLOTS", "retryable": false},
+  "recovery": {
+    "category": "availability",
+    "reason_code": "NO_AVAILABLE_SLOTS",
+    "explanation": "目前的服務和日期範圍沒有可預約名額。",
+    "required_fields": [],
+    "options": [{"action": "search_slots", "label": "換日期再搜尋", "payload": {}}]
+  }
+}
+```
+
+`recovery` 是 LLM-ready 的語義資料，但 LLM 不直接執行 tool。前端只把白名單化的 `options` 轉為既有 actions；例如替代時段仍回到 `search_slots`，預約提交仍必須經過原本的 `confirm`。只有 `completed`、`cancelled`、`failed` 和 `human_handoff` 會自動收合；`awaiting_user_input` 保持展開，直到使用者補充資料、選擇方案、取消或轉交人工。
+
 ------
 
 # 4. 核心架構決策

@@ -34,6 +34,9 @@
           │
           ▼
 Interaction Controller / Workflow
+          │
+          ▼
+   Middleware Task Manager
           │ 既有 InteractionResponse，加可選 task_id
           ▼
    TaskResponse 投影
@@ -58,6 +61,17 @@ Middleware 負責：
 
 LLM 或 intent recognizer 負責理解輸入和產生結構化意圖，但不直接改寫工作區，也不直接呼叫 mock backend。
 
+### Middleware Task Manager
+
+`middleware/task_manager/` 是 middleware 內管理目前 task lifecycle 的邊界，負責接收 `SessionState`、`ToolExecutionResult` 和 workflow recovery policy，並將合法狀態轉移投影為 `TaskResponse`。package 分為：
+
+- `contracts.py`：task state、transition、recovery plan 和對外 response 欄位；
+- `manager.py`：新 task、action chain、step/tool result、resume、cancel、complete 和 fail；
+- `recovery.py`：backend error 或空結果到 `RecoveryPlan` 的 deterministic mapping；
+- `transitions.py`：可允許狀態轉移與 terminal state 規則。
+
+`InteractionController` 保留 intent 辨識和 workflow 順序，不再直接散落修改 task lifecycle。`SessionState` 仍是 in-memory session 容器；Task Manager 是它與 execution pipeline 之間的 task adapter。LLM 未來只能讀取白名單化的 `RecoveryPlan` 和 workflow context，再透過既有 action 或 `continueTask()` contract 繼續任務。
+
 ## 任務模型與擴展接口
 
 目前前端任務記錄使用 local ID；後端 task ID 為可選的外部識別：
@@ -69,12 +83,13 @@ LLM 或 intent recognizer 負責理解輸入和產生結構化意圖，但不直
   title: "查詢醫療預約",
   channel: "text", // text | voice | ui
   status: "running", // running | completed | cancelled | failed | human_handoff
-  taskState: "querying",
+  taskState: "querying", // querying | awaiting_user_input | ...
   currentStep: "load_appointments",
   response: {
     steps: [],
     data: {},
-    actions: []
+    actions: [],
+    recovery: null
   },
   expanded: true
 }
@@ -103,6 +118,7 @@ toggleTask(taskId)
 更新 steps／資料／actions
   ├─ completed       → 保留並收合
   ├─ cancelled       → 保留並收合
+  ├─ awaiting_user_input → 保留原因並展開，等待補充／選擇
   ├─ failed          → 保留錯誤並收合
   └─ human_handoff   → 保留狀態並收合
 ```
@@ -161,7 +177,9 @@ data.intent === "medical_query"
 
 ## 錯誤與相容性
 
-- middleware response error：目前任務保留卡片並標記失敗；錯誤文案使用現有可理解訊息。
+- middleware response error：由 Task Manager 的 recovery policy 分類。缺少資料、沒有名額和暫時性 backend error 標記為 `awaiting_user_input`，保留目前 task 並回傳 `recovery` 和可執行 actions；權限、未知 tool 或 response schema 錯誤才標記為 `failed`。
+- 醫療預約搜尋返回空時段也視為 `NO_AVAILABLE_SLOTS`，前端顯示額滿／無時段原因及替代方案，而不是當作普通成功。
+- `error` 保留 machine-readable code；`recovery.explanation`、`required_fields` 和 action label 使用 user-facing 白名單，不顯示 request ID、tool name、FHIR resource type、內部 ID 或 raw backend JSON。
 - HTTP 或 middleware unavailable：前端保留已建立任務，允許重新輸入；不清空左側對話或歷史任務。
 - retry、cancel、confirm、human help 的既有 action payload 不變。
 - speech input 仍先填回文字框，再由送出流程建立或繼續任務。
@@ -180,9 +198,11 @@ data.intent === "medical_query"
 
 1. 前端靜態 contract 測試驗證 task list、start／update／continue 接口、收放語意和資料優先級。
 2. middleware unit test 驗證新的高階 message 清理 stale workflow data，action chain 不被清理。
-3. integration test 驗證同一 session 先完成預約、再進行查詢時，response 只使用新的查詢 data。
-4. 所有 frontend JavaScript 通過 `node --check`。
-5. 所有既有 Python tests 通過。
-6. 本地 smoke check 驗證：查詢卡片顯示預約結果；預約流程的進行中卡片顯示 steps；完成後卡片收合；舊卡片可重新展開；手機寬度仍可操作。
+3. Task Manager unit test 驗證合法／非法 transition、recovery policy、可恢復錯誤和 hard failure。
+4. integration test 驗證同一 session 先完成預約、再進行查詢時，response 只使用新的查詢 data；可恢復錯誤後 action 仍可繼續同一 workflow。
+5. frontend static contract 驗證 `awaiting_user_input` 卡片保持展開、recovery options 使用同一 task ID，且不暴露內部識別值。
+6. 所有 frontend JavaScript 通過 `node --check`。
+7. 所有既有 Python tests 通過。
+8. 本地 smoke check 驗證：查詢卡片顯示預約結果；預約流程的進行中卡片顯示 steps；錯誤時卡片保留原因和下一步；恢復後沿用同一張卡；完成後卡片收合；舊卡片可重新展開；手機寬度仍可操作。
 
 完成條件是：使用者可以在工作區分辨多個獨立辦事項，看到目前任務的每個步驟，並在任務結束後回看收合的結果；未來 LLM 的對話式確認不需要重寫任務卡片模型。
