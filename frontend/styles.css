@@ -551,6 +551,26 @@ textarea::placeholder {
   background: #ffffff;
 }
 
+.referral-field {
+  display: grid;
+  gap: 4px;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.referral-field input,
+.referral-field select {
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: #ffffff;
+}
+
 .service-choice-list,
 .slot-choice-list {
   display: grid;

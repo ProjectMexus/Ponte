@@ -24,6 +24,10 @@ class FrontendStaticTests(unittest.TestCase):
         with self.opener.open(self.base_url + "/mcp-client.js") as response:
             self.assertIn("MiddlewareClient", response.read().decode("utf-8"))
 
+    def test_static_assets_are_not_cached_during_local_development(self):
+        with self.opener.open(self.base_url + "/app.js") as response:
+            self.assertEqual(response.headers.get("Cache-Control"), "no-store")
+
     def test_path_traversal_is_not_served(self):
         with self.assertRaises(Exception):
             self.opener.open(self.base_url + "/../docs/PonteArch.md")
@@ -53,9 +57,15 @@ class FrontendStaticTests(unittest.TestCase):
         )
         self.assertIn("sendAction", Path("frontend/app.js").read_text(encoding="utf-8"))
         self.assertIn(
-            "action.kind || action.id",
+            "action.kind || action.action || action.id",
             Path("frontend/interaction-view.js").read_text(encoding="utf-8"),
         )
+
+    def test_frontend_submits_actions_returned_by_middleware(self):
+        app = Path("frontend/app.js").read_text(encoding="utf-8")
+        view = Path("frontend/interaction-view.js").read_text(encoding="utf-8")
+        self.assertIn("action.kind || action.action || action.id", app)
+        self.assertIn("action.kind || action.action || action.id", view)
 
     def test_styles_define_large_controls_and_focus(self):
         css = Path("frontend/styles.css").read_text(encoding="utf-8")
@@ -101,6 +111,15 @@ class FrontendStaticTests(unittest.TestCase):
             self.assertIn(marker, source)
         self.assertIn('kind: "search_slots"', source)
         self.assertIn('kind: "select_slot"', source)
+
+    def test_view_supports_mock_referral_confirmation(self):
+        source = Path("frontend/interaction-view.js").read_text(encoding="utf-8")
+        for marker in (
+            "confirm_appointment",
+            "referring_appointment_id",
+            "APT-REF-1",
+        ):
+            self.assertIn(marker, source)
 
     def test_speech_module_has_fallback_and_cantonese_locale(self):
         js = Path("frontend/speech.js").read_text(encoding="utf-8")

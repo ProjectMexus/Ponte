@@ -94,6 +94,7 @@ class ControllerTests(unittest.TestCase):
             InteractionRequest("S-BOOKING", "我想預約醫療服務")
         )
         self.assertEqual(response["task_state"], "selecting_service")
+        self.assertEqual(response["actions"][0]["kind"], "search_slots")
         self.assertEqual([call.name for call in self.pipeline.calls], [
             "medical.get_my_appointments",
             "medical.list_appointment_services",

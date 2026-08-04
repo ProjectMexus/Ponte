@@ -98,7 +98,7 @@ export function startPonteApp() {
     try {
       const response = await client.sendAction({
         session_id: sessionId,
-        action: action.kind || action.id,
+        action: action.kind || action.action || action.id,
         payload: action.payload || {},
       });
       view.renderResponse(response);

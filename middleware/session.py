@@ -59,6 +59,13 @@ def build_response(
 ) -> dict[str, Any]:
     """Build a JSON-safe copy of the public interaction response."""
 
+    public_actions: list[dict[str, Any]] = []
+    for action in actions:
+        public_action = deepcopy(dict(action))
+        if "kind" not in public_action and isinstance(public_action.get("action"), str):
+            public_action["kind"] = public_action["action"]
+        public_actions.append(public_action)
+
     response: dict[str, Any] = {
         "session_id": state.session_id,
         "assistant_message": assistant_message,
@@ -66,7 +73,7 @@ def build_response(
         "current_step": state.current_step,
         "steps": deepcopy(state.steps),
         "tool_events": deepcopy(state.tool_events),
-        "actions": deepcopy([dict(action) for action in actions]),
+        "actions": public_actions,
         "data": deepcopy(state.data),
     }
     if state.last_error is not None:

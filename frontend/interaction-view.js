@@ -144,15 +144,65 @@ function slotLabel(slot) {
   return asText(slot.id);
 }
 
-function renderGenericActions(container, actions, onAction) {
+const MOCK_REFERRAL_ID = "APT-REF-1";
+
+function actionKind(action) {
+  return action.kind || action.action || action.id || "";
+}
+
+function createReferralControl(data) {
+  const field = createElement("label", "referral-field");
+  field.append(createElement("span", "date-field-label", "關聯門診／轉介編號"));
+
+  const appointmentIds = (Array.isArray(data.appointments) ? data.appointments : [])
+    .map((appointment) => appointment?.id)
+    .filter((id) => typeof id === "string" && id.trim());
+  let control;
+  if (appointmentIds.length > 0) {
+    control = createElement("select");
+    control.name = "referring_appointment_id";
+    appointmentIds.forEach((id) => {
+      const option = createElement("option", "", id);
+      option.value = id;
+      control.append(option);
+    });
+  } else {
+    control = createElement("input");
+    control.type = "text";
+    control.name = "referring_appointment_id";
+    control.value = MOCK_REFERRAL_ID;
+    control.placeholder = MOCK_REFERRAL_ID;
+  }
+  field.append(control);
+  return control;
+}
+
+function renderGenericActions(container, actions, onAction, prepareAction = (action) => action) {
   (actions || []).forEach((action) => {
-    const kind = action.kind || action.id || "action";
+    const kind = actionKind(action) || "action";
     const button = createElement("button", "action-button", action.label || "繼續");
     button.type = "button";
     if (kind === "confirm") button.classList.add("is-confirm");
     if (kind === "cancel" || kind === "human_help") button.classList.add("is-danger");
-    button.addEventListener("click", () => onAction(action));
+    button.addEventListener("click", () => onAction(prepareAction(action)));
     container.append(button);
+  });
+}
+
+function renderConfirmationActions(container, response, onAction) {
+  const data = response?.data && typeof response.data === "object" ? response.data : {};
+  const referralControl = createReferralControl(data);
+  container.append(referralControl.closest("label"));
+  container.append(createElement("p", "field-help", "Mock 測試預設使用 APT-REF-1；如有現有預約可選擇。"));
+  renderGenericActions(container, response?.actions, onAction, (action) => {
+    if (actionKind(action) !== "confirm") return action;
+    return {
+      ...action,
+      payload: {
+        ...(action.payload || {}),
+        referring_appointment_id: referralControl.value.trim(),
+      },
+    };
   });
 }
 
@@ -207,6 +257,11 @@ function renderActions(container, response, onAction) {
     });
     if (slots.length === 0) choices.append(createElement("div", "empty-workspace", "目前沒有可預約時段。"));
     container.append(choices);
+    return;
+  }
+
+  if (response?.current_step === "confirm_appointment") {
+    renderConfirmationActions(container, response, onAction);
     return;
   }
 
