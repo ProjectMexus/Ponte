@@ -82,8 +82,34 @@ _UUID_SEGMENT = re.compile(
 )
 _UPPERCASE_IDENTIFIER_SEGMENT = re.compile(r"^[A-Z0-9]+(?:-[A-Z0-9]+)+$")
 _BEARER_TEXT = re.compile(r'''(?i)\bBearer\s+[^\s,;}\]"']+''')
+_DEBUG_CREDENTIAL_KEY_PATTERN = (
+    r"(?:authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|"
+    r"client[_-]?secret|password|secret|token|cookie|set[-_]?cookie)"
+)
+_HEADER_CREDENTIAL_TEXT = re.compile(
+    r'''(?ix)
+    (?P<prefix>
+        (?<![\w-])
+        (?:authorization|cookie|set[-_]?cookie)
+        \s*[:=]\s*
+    )
+    (?P<value>[^\r\n]*)
+    '''
+)
 _TOKEN_ASSIGNMENT_TEXT = re.compile(
-    r'''(?i)\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}\]"']+)'''
+    rf'''(?ix)
+    (?P<prefix>
+        (?<![\w-])
+        (?:\\?["'])?
+        {_DEBUG_CREDENTIAL_KEY_PATTERN}
+        (?:\\?["'])?
+        \s*[:=]\s*
+    )
+    (?:
+        "(?:\\.|[^"\\])*"
+        | '(?:\\.|[^'\\])*'
+        | [^\s,;}}\]"']+
+    )'''
 )
 
 
@@ -223,8 +249,9 @@ def _redact_debug_text(value: str) -> str:
     configured_key = os.environ.get("PONTE_LLM_API_KEY", "")
     if configured_key:
         value = value.replace(configured_key, "<redacted>")
+    value = _HEADER_CREDENTIAL_TEXT.sub(r"\g<prefix><redacted>", value)
     value = _BEARER_TEXT.sub("Bearer <redacted>", value)
-    return _TOKEN_ASSIGNMENT_TEXT.sub(r"\1<redacted>", value)
+    return _TOKEN_ASSIGNMENT_TEXT.sub(r"\g<prefix><redacted>", value)
 
 
 def _redact_debug_value(value: object) -> object:

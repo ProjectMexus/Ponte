@@ -39,7 +39,11 @@ class PonteLoggingTests(unittest.TestCase):
                     },
                     prompt=(
                         "medical data CONFIGURED_API_KEY; "
-                        "Authorization: Bearer INLINE_BEARER; token=INLINE_TOKEN"
+                        "Authorization: Bearer INLINE_BEARER; token=INLINE_TOKEN; "
+                        '{"api_key":"INLINE_JSON_KEY","access_token":"INLINE_JSON_TOKEN"}; '
+                        "Authorization: Basic INLINE_AUTH; "
+                        "Cookie: session=INLINE_COOKIE; csrf=INLINE_CSRF\n"
+                        "Set-Cookie: session=INLINE_SET_COOKIE; Path=/"
                     ),
                 )
 
@@ -53,6 +57,12 @@ class PonteLoggingTests(unittest.TestCase):
             "INLINE_SECRET",
             "INLINE_BEARER",
             "INLINE_TOKEN",
+            "INLINE_JSON_KEY",
+            "INLINE_JSON_TOKEN",
+            "INLINE_AUTH",
+            "INLINE_COOKIE",
+            "INLINE_CSRF",
+            "INLINE_SET_COOKIE",
         ):
             self.assertNotIn(secret, output)
 
