@@ -138,7 +138,7 @@ python3 -m unittest \
 
 Expected: FAIL because the current UI has one static workspace root, no task lifecycle manager, and `SessionState` does not reset before a new message.
 
-- [ ] **Step 6: Commit the regression contracts**
+- [x] **Step 6: Commit the regression contracts**
 
 ```bash
 git add tests/test_frontend_static.py middleware/tests/test_controller.py tests/test_middleware_integration.py
@@ -156,7 +156,7 @@ git commit -m "test: define task workspace lifecycle"
 - Consumes: Task 1 stale-state regression tests.
 - Produces: `SessionState.reset_for_new_task()` and message handling that starts each new high-level task with clean workflow data while leaving `handle_action()` unchanged.
 
-- [ ] **Step 1: Implement the reset method on `SessionState`**
+- [x] **Step 1: Implement the reset method on `SessionState`**
 
 Add this method to `middleware/session.py`:
 
@@ -174,7 +174,7 @@ Add this method to `middleware/session.py`:
 
 This only resets in-memory interaction state; it must not touch any mock backend repository.
 
-- [ ] **Step 2: Invoke the reset at the start of a new message**
+- [x] **Step 2: Invoke the reset at the start of a new message**
 
 In `InteractionController.handle_message`, replace the current `state.last_error = None` and pending diagnostic cleanup with:
 
@@ -185,7 +185,7 @@ In `InteractionController.handle_message`, replace the current `state.last_error
 
 Keep diagnostic parsing after the reset. Do not call this method from `handle_action`; action chains need the current services, slots, selected slot and confirmation record.
 
-- [ ] **Step 3: Run the middleware regression tests**
+- [x] **Step 3: Run the middleware regression tests**
 
 Run:
 

@@ -24,6 +24,18 @@ class SessionState:
     confirmation_record: dict[str, Any] | None = None
     last_error: dict[str, Any] | None = None
 
+    def reset_for_new_task(self) -> None:
+        """Clear the current workflow before handling a new high-level request."""
+
+        self.task_state = "idle"
+        self.current_step = "welcome"
+        self.data.clear()
+        self.steps.clear()
+        self.tool_events.clear()
+        self.last_tool_call = None
+        self.confirmation_record = None
+        self.last_error = None
+
 
 class SessionStore:
     """Thread-safe in-memory store for session objects."""

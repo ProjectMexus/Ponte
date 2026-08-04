@@ -59,8 +59,7 @@ class InteractionController:
         if not isinstance(request, InteractionRequest):
             raise ValueError("request must be an InteractionRequest")
         state = self.sessions.get_or_create(request.session_id)
-        state.last_error = None
-        state.data.pop("pending_diagnostic", None)
+        state.reset_for_new_task()
 
         diagnostic = DiagnosticCommand.parse(request.message)
         if diagnostic is not None:
