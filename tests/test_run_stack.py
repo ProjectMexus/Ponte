@@ -77,12 +77,18 @@ class RunStackTests(unittest.TestCase):
         filter_example = r"rg '\[(frontend|middleware|llm|mcp|backend)\]' ponte-terminal.log"
         for document in (readme, middleware_readme):
             self.assertIn("PONTE_LOG_LEVEL=INFO python3 scripts/run_stack.py", document)
+            self.assertIn("PONTE_LOG_LEVEL=DEBUG python3 scripts/run_stack.py", document)
             self.assertIn(filter_example, document)
             for component in ("frontend", "middleware", "llm", "mcp", "backend"):
                 self.assertIn(f"[{component}]", document)
-            self.assertIn("raw LLM", document)
+            self.assertIn("INFO", document)
+            self.assertIn("DEBUG", document)
+            self.assertIn("完整 LLM prompt/response", document)
+            self.assertIn("MCP request/response", document)
+            self.assertIn("medical data", document)
+            self.assertIn("HTTP body", document)
             self.assertIn("API key", document)
-            self.assertIn("medical payload", document)
+            self.assertIn("credentials", document)
 
     def test_frontend_url_includes_middleware_override(self):
         self.assertEqual(

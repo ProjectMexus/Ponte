@@ -91,13 +91,19 @@ python3 scripts/run_stack.py --data-dir data/mock
 
 ### Terminal logging
 
-`run_stack.py` 會在啟動 backend、middleware/MCP 和 frontend 前載入本地 `.env`；shell 中已存在的同名變數優先。可用 `PONTE_LOG_LEVEL` 控制 terminal logging，預設建議使用 `INFO`：
+`run_stack.py` 會在啟動 backend、middleware/MCP 和 frontend 前載入本地 `.env`；shell 中已存在的同名變數優先。可用 `PONTE_LOG_LEVEL` 控制 terminal logging，預設使用 `INFO`：
 
 ```bash
 PONTE_LOG_LEVEL=INFO python3 scripts/run_stack.py
 ```
 
-輸出會使用 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component prefix，並只顯示安全 metadata，例如 method/path/status、model/endpoint metadata、message character counts、normalized intent、tool name/input keys、outcome 和 latency。提高 log level 也不會啟用 raw LLM content；完整 prompt/response、API key 或其他 credentials，以及 medical payload 都不會寫入 terminal。
+INFO 只輸出安全摘要，例如 method/path/status、model/endpoint metadata、message character counts、normalized intent、tool name/input keys、outcome 和 latency。需要在本機除錯內容流時可使用 DEBUG：
+
+```bash
+PONTE_LOG_LEVEL=DEBUG python3 scripts/run_stack.py
+```
+
+DEBUG 會在 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component logs 之外，顯示完整 LLM prompt/response 及 MCP request/response，包括醫療資料（medical data）。frontend、middleware HTTP server 和 mock backend 仍不記錄 HTTP body；API key、Authorization、Cookie、Bearer token 及其他 credentials 在任何 level 都會遮罩。DEBUG 可能包含醫療資料，只應在受控的本機 terminal 使用；完成除錯後改回 `PONTE_LOG_LEVEL=INFO`。
 
 若已將 terminal output 保存為 `ponte-terminal.log`，可用以下篩選所有 component：
 

@@ -34,13 +34,19 @@ python3 scripts/run_stack.py
 
 ## Terminal logging
 
-`run_stack.py` 會在啟動 child processes 前載入本地 `.env`，shell 中已存在的同名環境變數優先。可用以下設定啟動 safe-by-default 的 terminal logging：
+`run_stack.py` 會在啟動 child processes 前載入本地 `.env`，shell 中已存在的同名環境變數優先。`INFO`（預設）只顯示 safe summaries：
 
 ```bash
 PONTE_LOG_LEVEL=INFO python3 scripts/run_stack.py
 ```
 
-輸出會使用 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component prefix，只顯示 method/path/status、model/endpoint metadata、message character counts、normalized intent、tool name/input keys、outcome 和 latency 等安全 metadata。提高 log level 也不會啟用 raw LLM content；完整 prompt/response、API key 或其他 credentials，以及 medical payload 都不會寫入 terminal。
+若要在本機除錯 intent、預約或醫療查詢的內容流，可改用 DEBUG：
+
+```bash
+PONTE_LOG_LEVEL=DEBUG python3 scripts/run_stack.py
+```
+
+DEBUG 會使用 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component prefix，並在安全摘要之外顯示完整 LLM prompt/response 及 MCP request/response，包括醫療資料（medical data）。frontend、middleware HTTP server 和 mock backend 仍不記錄 HTTP body；API key、Authorization、Cookie、Bearer token 及其他 credentials 在任何 level 都會遮罩。DEBUG 可能包含醫療資料，只應在受控的本機 terminal 使用；完成除錯後改回 `PONTE_LOG_LEVEL=INFO`。
 
 若已將 terminal output 保存為 `ponte-terminal.log`，可用以下篩選 component logs：
 
