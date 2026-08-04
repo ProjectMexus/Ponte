@@ -242,7 +242,7 @@ git commit -m "test: verify medical text persistence across restart"
 - Consumes: completed Tasks 1–3.
 - Produces: evidence that all relevant tests pass, Python modules compile, whitespace is clean, and unrelated user changes remain untouched.
 
-- [ ] **Step 1: Run the non-socket full suite**
+- [x] **Step 1: Run the full suite with socket tests enabled**
 
 Run:
 
@@ -250,9 +250,9 @@ Run:
 python3 -m unittest discover -s tests -v
 ```
 
-Expected: all tests pass except none; if socket binding is denied by the sandbox, rerun only the socket suites with the approved elevated test command and record that result.
+The initial sandbox run was blocked only at localhost socket setup; the approved elevated rerun completed the full suite successfully.
 
-- [ ] **Step 2: Run compilation and diff checks**
+- [x] **Step 2: Run compilation and diff checks**
 
 Run:
 
@@ -264,10 +264,10 @@ git status --short
 
 Expected: compile succeeds, diff check emits no output, and status shows only the intended persistence commits plus the pre-existing `middleware/intent.py` and `middleware/tests/test_intent.py` changes.
 
-- [ ] **Step 3: Confirm runtime files are ignored and visible**
+- [x] **Step 3: Confirm runtime files are ignored and visible**
 
 Run a temporary application smoke check that creates one medical registration under a temporary data root and prints the relative `*.txt` paths. Confirm the paths include `medical/appointments.txt`, `medical/tasks.txt`, `medical/idempotency.txt`, and `id_sequences.txt`; do not create runtime state in the repository-root `database/` during tests.
 
-- [ ] **Step 4: Report verification evidence**
+- [x] **Step 4: Report verification evidence**
 
 Summarize the default path, medical restart behavior, test commands and results, changed files, and the preserved unrelated middleware modifications. Do not claim completion until the verification output confirms these points.
