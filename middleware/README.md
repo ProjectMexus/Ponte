@@ -46,7 +46,7 @@ PONTE_LOG_LEVEL=INFO python3 scripts/run_stack.py
 PONTE_LOG_LEVEL=DEBUG python3 scripts/run_stack.py
 ```
 
-DEBUG 會使用 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component prefix，並在安全摘要之外顯示完整 LLM prompt/response 及 MCP request/response，包括醫療資料（medical data）。frontend、middleware HTTP server 和 mock backend 仍不記錄 HTTP body；API key、Authorization、Cookie、Bearer token 及其他 credentials 在任何 level 都會遮罩。DEBUG 可能包含醫療資料，只應在受控的本機 terminal 使用；完成除錯後改回 `PONTE_LOG_LEVEL=INFO`。
+DEBUG 會使用 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component prefix，並在安全摘要之外顯示完整 LLM prompt/response 及 MCP request/response，包括醫療資料（medical data）。LLM provider 的 success response bodies 和 provider error response bodies 在 DEBUG 中只要可取得就會記錄，包括正常回應、解析失敗回應及 HTTP error body；若沒有 response 可取得，則記錄 `response_unavailable=true` 和固定的 error type。JSON 會以 indented multi-line 格式輸出，每行都保留完整 timestamp/level/component prefix。frontend、middleware HTTP server 和 mock backend 仍不記錄 HTTP body；API key、Authorization、Cookie、Bearer token 及其他 credentials 在任何 level 都會遮罩。DEBUG 可能包含醫療資料，只應在受控的本機 terminal 使用；完成除錯後改回 `PONTE_LOG_LEVEL=INFO`。
 
 若已將 terminal output 保存為 `ponte-terminal.log`，可用以下篩選 component logs：
 
