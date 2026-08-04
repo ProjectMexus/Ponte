@@ -14,7 +14,7 @@ from threading import Lock
 from typing import Any, Callable
 
 from MCP.errors import AdapterError
-from ponte_logging import log_event
+from ponte_logging import log_debug_event, log_event
 
 
 ProcessFactory = Callable[..., Any]
@@ -96,6 +96,16 @@ class McpStdioClient:
                     bufsize=1,
                 )
                 self._process = process
+                initialize_request = {
+                    "jsonrpc": "2.0",
+                    "id": initialize_id,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-03-26",
+                        "capabilities": {},
+                        "clientInfo": {"name": "ponte-middleware", "version": "0.1.0"},
+                    },
+                }
                 log_event(
                     "mcp",
                     "send",
@@ -103,18 +113,23 @@ class McpStdioClient:
                     operation="initialize",
                     input_keys="capabilities,clientInfo,protocolVersion",
                 )
+                log_debug_event(
+                    "mcp",
+                    "send_debug",
+                    request_id=initialize_request_id,
+                    operation="initialize",
+                    request=initialize_request,
+                )
                 response = self._request(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": initialize_id,
-                        "method": "initialize",
-                        "params": {
-                            "protocolVersion": "2025-03-26",
-                            "capabilities": {},
-                            "clientInfo": {"name": "ponte-middleware", "version": "0.1.0"},
-                        },
-                    },
+                    initialize_request,
                     expected_id=initialize_id,
+                )
+                log_debug_event(
+                    "mcp",
+                    "receive_debug",
+                    request_id=initialize_request_id,
+                    operation="initialize",
+                    response=response,
                 )
                 self._next_id += 1
                 result = response.get("result")
@@ -196,6 +211,12 @@ class McpStdioClient:
             self._next_id += 1
             started_at = time.monotonic()
             try:
+                request = {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "method": "tools/call",
+                    "params": {"name": name, "arguments": dict(arguments)},
+                }
                 log_event(
                     "mcp",
                     "send",
@@ -204,14 +225,25 @@ class McpStdioClient:
                     tool=name,
                     input_keys=",".join(sorted(str(key) for key in arguments)),
                 )
+                log_debug_event(
+                    "mcp",
+                    "send_debug",
+                    request_id=request_id,
+                    operation="tools/call",
+                    tool=name,
+                    request=request,
+                )
                 response = self._request(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": request_id,
-                        "method": "tools/call",
-                        "params": {"name": name, "arguments": dict(arguments)},
-                    },
+                    request,
                     expected_id=request_id,
+                )
+                log_debug_event(
+                    "mcp",
+                    "receive_debug",
+                    request_id=request_id,
+                    operation="tools/call",
+                    tool=name,
+                    response=response,
                 )
                 result = response.get("result")
                 if not isinstance(result, Mapping):

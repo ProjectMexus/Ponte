@@ -3,6 +3,7 @@ import os
 import subprocess
 import threading
 import unittest
+from unittest.mock import patch
 
 from MCP.errors import AdapterError
 from middleware.mcp_client import McpClientError, McpStdioClient
@@ -172,6 +173,76 @@ class McpStdioClientTests(unittest.TestCase):
         self.assertNotIn("arguments=", output)
         self.assertNotIn("response=", output)
         self.assertNotIn("details=", output)
+
+    def test_debug_logs_mcp_requests_and_responses_with_redaction(self):
+        process = FakeProcess([
+            initialize_response(),
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "result": {
+                    "content": [{"type": "text", "text": "{}"}],
+                    "structuredContent": {
+                        "patient_id": "PATIENT-DEBUG-001",
+                        "appointment_id": "APPOINTMENT-DEBUG-001",
+                        "nested": {"authorization": "Bearer BEARER_DEBUG_TOKEN"},
+                    },
+                },
+            },
+        ])
+        client = self.make_client(process)
+
+        with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "DEBUG"}):
+            with self.assertLogs("ponte", level="DEBUG") as captured:
+                result = client.call_tool(
+                    "medical.list_departments",
+                    {
+                        "context": {"authorization": "Bearer BEARER_DEBUG_TOKEN"},
+                        "input": {"patient_id": "PATIENT-DEBUG-001"},
+                    },
+                )
+
+        self.assertEqual(result["appointment_id"], "APPOINTMENT-DEBUG-001")
+        output = "\n".join(captured.output)
+        self.assertIn('"method":"tools/call"', output)
+        self.assertIn("PATIENT-DEBUG-001", output)
+        self.assertIn("APPOINTMENT-DEBUG-001", output)
+        self.assertNotIn("BEARER_DEBUG_TOKEN", output)
+        self.assertIn("<redacted>", output)
+
+    def test_info_hides_mcp_requests_and_responses(self):
+        process = FakeProcess([
+            initialize_response(),
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "result": {
+                    "content": [{"type": "text", "text": "{}"}],
+                    "structuredContent": {
+                        "patient_id": "PATIENT-DEBUG-001",
+                        "appointment_id": "APPOINTMENT-DEBUG-001",
+                    },
+                },
+            },
+        ])
+        client = self.make_client(process)
+
+        with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "INFO"}):
+            with self.assertLogs("ponte", level="INFO") as captured:
+                client.call_tool(
+                    "medical.list_departments",
+                    {
+                        "context": {},
+                        "input": {"patient_id": "PATIENT-DEBUG-001"},
+                    },
+                )
+
+        output = "\n".join(captured.output)
+        self.assertNotIn('"method":"tools/call"', output)
+        self.assertNotIn("PATIENT-DEBUG-001", output)
+        self.assertNotIn("APPOINTMENT-DEBUG-001", output)
+        self.assertNotIn("request=", output)
+        self.assertNotIn("response=", output)
 
     def test_call_tool_maps_mcp_tool_error_to_adapter_error(self):
         process = FakeProcess([
