@@ -128,6 +128,8 @@ fail(state, message)
 
 `recovery.options` 是供 LLM 和其他 task adapter 理解的語義資料；`actions` 是前端唯一可以執行的 action 白名單。action payload 可攜帶 workflow 所需的內部值，但 label、explanation 和其他 user-facing text 不得包含 request ID、tool name、FHIR type 或 raw backend message。
 
+Task Manager 的 response serializer 會把每個 `RecoveryOption` 投影為既有 action 形狀：`action` 轉成 `kind`，保留白名單化的 `label` 和受控 `payload`。因此 frontend 不需要理解 `RecoveryPlan` 的內部語義，也不會直接從 recovery object 執行未知 action。
+
 `required_fields` 使用以下形狀描述需要使用者補充的資料：
 
 ```json

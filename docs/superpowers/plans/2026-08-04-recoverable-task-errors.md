@@ -330,7 +330,7 @@ Add:
 recovery: dict[str, Any] | None = None
 ```
 
-Clear it in `reset_for_new_task()`. Include a deep-copied `recovery` field in `build_response()` only when it is not `None`; keep the existing `error` field and all existing response keys unchanged.
+Clear it in `reset_for_new_task()`. Include a deep-copied `recovery` field in `build_response()` only when it is not `None`; keep the existing `error` field and all existing response keys unchanged. The serializer must project every `RecoveryOption` from `recovery.options` into the existing action shape `{"kind": option.action, "label": option.label, "payload": option.payload}` so the frontend can execute only the established action contract.
 
 - [ ] **Step 2: Implement lifecycle helpers**
 

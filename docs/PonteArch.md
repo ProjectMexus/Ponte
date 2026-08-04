@@ -242,6 +242,8 @@ Intent LLM 只理解使用者想做什麼，例如查詢預約或開始預約；
 
 兩者必須使用不同的 interface、system prompt、context allowlist、設定和測試 double。`middleware/intent.py` 管理 `IntentRecognizer`；`middleware/task_manager/interpreter.py` 管理 `TaskRecoveryInterpreter`。第一版 Task Recovery LLM 使用 deterministic recovery policy 作為 fallback，未來可注入獨立的 LLM client。所有模型輸出都必須先驗證成 `RecoveryPlan`，再由 Task Manager 轉成既有 action；LLM 不可跳過確認節點。
 
+Task Manager 的 response serializer 會將 `RecoveryPlan.options` 映射為既有 `actions[{kind, label, payload}]`，Frontend 只消費 actions，不直接執行 LLM 輸出或 recovery object 中的未知欄位。
+
 ------
 
 # 4. 核心架構決策
