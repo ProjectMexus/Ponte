@@ -13,7 +13,7 @@ from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
-from ponte_logging import endpoint_label, log_event
+from ponte_logging import endpoint_label, log_debug_event, log_event
 
 
 IntentName = Literal[
@@ -198,16 +198,34 @@ class LlmIntentRecognizer(IntentRecognizer):
             message_count=len(request_body["messages"]),
             message_chars=len(message),
         )
+        log_debug_event(
+            "llm",
+            "send_debug",
+            request_id=request_id,
+            model=self.model,
+            endpoint=endpoint_label(self.api_url),
+            prompt=request_body["messages"],
+        )
         try:
             response = self._transport(request, self.timeout)
             decision = self._parse_response(response)
+            latency_ms = round((time.monotonic() - started_at) * 1000)
+            log_debug_event(
+                "llm",
+                "receive_debug",
+                request_id=request_id,
+                response=response,
+                intent=decision.intent,
+                confidence=decision.confidence,
+                latency_ms=latency_ms,
+            )
             log_event(
                 "llm",
                 "receive",
                 request_id=request_id,
                 intent=decision.intent,
                 confidence=decision.confidence,
-                latency_ms=round((time.monotonic() - started_at) * 1000),
+                latency_ms=latency_ms,
             )
             return decision
         except IntentRecognitionError as error:

@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import os
 import unittest
 from unittest.mock import patch
 
@@ -113,6 +114,71 @@ class IntentTests(unittest.TestCase):
         self.assertNotIn("API_KEY_SECRET", output)
         self.assertNotIn("Authorization", output)
         self.assertNotIn("test-key", output)
+
+    def test_llm_debug_logs_prompt_and_provider_response(self):
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions",
+            api_key="CONFIGURED_API_KEY",
+            model="test-model",
+            transport=lambda request, timeout: {
+                "choices": [{
+                    "message": {
+                        "content": (
+                            '{"intent":"medical_query","confidence":0.91,'
+                            '"appointment_id":"APT-DEBUG-001"}'
+                        ),
+                    },
+                }],
+            },
+        )
+        with patch.dict(
+            os.environ,
+            {"PONTE_LOG_LEVEL": "DEBUG", "PONTE_LLM_API_KEY": "CONFIGURED_API_KEY"},
+        ):
+            with self.assertLogs("ponte", level="DEBUG") as captured:
+                recognizer.recognize("查詢我的醫療預約 PATIENT-DEBUG-001")
+
+        output = "\n".join(captured.output)
+        self.assertIn("prompt=", output)
+        self.assertIn("查詢我的醫療預約 PATIENT-DEBUG-001", output)
+        self.assertIn("response=", output)
+        self.assertIn("APT-DEBUG-001", output)
+        self.assertIn("intent=medical_query", output)
+        self.assertIn("confidence=0.91", output)
+        self.assertRegex(output, r"latency_ms=\d+")
+        self.assertNotIn("CONFIGURED_API_KEY", output)
+
+    def test_llm_debug_content_is_hidden_at_info(self):
+        prompt_marker = "查詢我的醫療預約 PATIENT-INFO-ONLY-001"
+        response_marker = "APT-INFO-ONLY-001"
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions",
+            api_key="CONFIGURED_API_KEY",
+            model="test-model",
+            transport=lambda request, timeout: {
+                "choices": [{
+                    "message": {
+                        "content": (
+                            '{"intent":"medical_query","confidence":0.83,'
+                            f'"appointment_id":"{response_marker}"}}'
+                        ),
+                    },
+                }],
+            },
+        )
+        with patch.dict(
+            os.environ,
+            {"PONTE_LOG_LEVEL": "INFO", "PONTE_LLM_API_KEY": "CONFIGURED_API_KEY"},
+        ):
+            with self.assertLogs("ponte", level="INFO") as captured:
+                recognizer.recognize(prompt_marker)
+
+        output = "\n".join(captured.output)
+        self.assertIn("[llm] send", output)
+        self.assertIn("[llm] receive", output)
+        self.assertNotIn(prompt_marker, output)
+        self.assertNotIn(response_marker, output)
+        self.assertNotIn("CONFIGURED_API_KEY", output)
 
     def test_llm_terminal_stderr_contains_only_safe_summary(self):
         recognizer = LlmIntentRecognizer(
