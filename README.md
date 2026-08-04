@@ -1,109 +1,140 @@
-# Ponte Mock Backends
+# Ponte 公共服務平台 Demo
 
-這是一組供 Ponte Demo 使用的 mock domain backend，依據 `docs/PonteArch.md` 和 `docs/api/` 建立。它們不連接真實政府、醫療或社福系統，不代表正式 API，也不執行真實身份驗證、醫療判斷、付款或電話撥出。
+Ponte 是一個面向長者的公共服務入口與任務執行 Demo。使用者可以用文字或瀏覽器語音表達需要，Ponte 再透過受控的 interaction flow、MCP tools 和 mock domain services 完成服務查詢及後續操作展示。
 
-## 完整 Demo 啟動與測試
+這個 repository 是本地可執行的 Demo，不連接真實政府、醫療或社福系統，也不代表正式 API；所有身份、醫療、活動、籌號、回執及持久化資料都是 mock。
 
-要驗證 `Frontend → Middleware → MCPServer → Mock Backend`，在 repo 根目錄執行：
+## 目前 Demo 範圍
+
+- 前端提供適合長者閱讀的對話介面、文字輸入、瀏覽器語音輸入及流程狀態展示。
+- Middleware 是前端唯一需要呼叫的 HTTP bridge，負責 interaction controller、session state 和 MCP process 管理。
+- MCP 轉接層以 stdio JSON-RPC 暴露固定的 21 個工具，將受控 tool call 轉為 mock backend HTTP request。
+- Mock backends 目前包含一戶通、醫療、社會福利及長者文娛活動 domain。
+- 目前前端自然語言端到端流程主要展示「查詢醫療預約」；其他 domain 可透過 MCP／API contract 和診斷接口測試。
+
+## 架構
+
+```text
+瀏覽器
+  │ 文字／語音
+  ▼
+frontend/                 靜態 UI
+  ▼ HTTP
+middleware/              Interaction Controller + session + execution pipeline
+  ▼ stdio JSON-RPC
+MCP/                     固定 tool registry + REST adapter
+  ▼ HTTP
+mock_backends/           One Account / Medical / Social Welfare
+```
+
+各層的責任是分開的：LLM 或 intent recognizer 不直接寫入 backend；流程、確認及 tool permission 由 middleware／workflow layer 控制；MCP 只負責受控的工具接入；mock backend 只模擬下游服務。
+
+## 快速開始
+
+需要 Python 3.13 或以上，不需要安裝第三方 Python 或 frontend runtime dependency。
+
+第一次使用可建立本地設定檔：
+
+```bash
+cp .env.example .env
+```
+
+在 repository 根目錄執行完整 stack：
 
 ```bash
 python3 scripts/run_stack.py
 ```
 
-runner 會依序啟動 mock backend、middleware、middleware 管理的 MCP stdio server，以及 frontend。看到 ready 訊息後開啟它列出的 Frontend URL，輸入：
+Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio server 及 frontend，並使用 temporary data directory。看到 `Ponte stack is ready.` 後，開啟它列出的 Frontend URL，輸入：
 
 ```text
 我想查詢醫療預約
 ```
 
-按「送出」，成功時畫面會顯示已連線、`selecting_service` 狀態，以及 `medical.get_my_appointments` 和 `medical.list_appointment_services` 兩個 tool event。按 `Ctrl-C` 會反向關閉三個服務，middleware 也會清理 MCP 子程序。
+成功時畫面會顯示 middleware 已連線、`selecting_service` 狀態，以及 `medical.get_my_appointments` 和 `medical.list_appointment_services` 兩個 tool events。按 `Ctrl-C` 會關閉整個 stack。
 
-若需要分開除錯，可依序在三個 terminal 執行：
-
-```bash
-python3 -m mock_backends.server --host 127.0.0.1 --port 8080 --data-dir /tmp/ponte-mock-data
-python3 -m middleware.server --host 127.0.0.1 --port 8090
-python3 -m frontend.server --host 127.0.0.1 --port 5173
-```
-
-## 啟動
-
-需要 Python 3.11 或以上，不需要第三方依賴：
+需要保留 mock state 時，可指定資料目錄：
 
 ```bash
-python -m mock_backends.server --host 127.0.0.1 --port 8080 --data-dir data/mock
+python3 scripts/run_stack.py --data-dir data/mock
 ```
 
-預設會在同一個 process mount 三個 domain：
+## 分開啟動各服務
 
-- One Account：`/mock/one-account`
-- Elderly Activities（歸屬 Social Welfare domain）：`/mock/elderly-activities/v1`
-- Medical：`/mock/medical/v1`
-- Social Welfare referrals：`/mock/social-welfare`
-
-## 快速示例
+需要逐層除錯時，可在不同 terminal 依次執行：
 
 ```bash
-curl -H 'X-Mock-User-Id: USR-DEMO-001' \
-  'http://127.0.0.1:8080/mock/one-account/cash-sharing-plan?year=2026'
+python3 -m mock_backends.server \
+  --host 127.0.0.1 --port 8080 --data-dir /tmp/ponte-mock-data
 
-curl 'http://127.0.0.1:8080/mock/elderly-activities/v1/activities?category=reading&available_only=true'
+python3 -m middleware.server \
+  --host 127.0.0.1 --port 8090
 
-curl 'http://127.0.0.1:8080/mock/medical/v1/departments'
-
-curl 'http://127.0.0.1:8080/mock/social-welfare/services?district=氹仔'
+python3 -m frontend.server \
+  --host 127.0.0.1 --port 5173
 ```
 
-建立操作依 API 文件要求提供 `Idempotency-Key`；需要使用者上下文的操作提供 `X-Mock-User-Id`，醫療資料操作另外提供 `X-Patient-Id`。需要確認的提交會驗證 `confirmation` 或 `consent=true`，不會由 backend 替 Workflow 跳過確認。
-
-## Domain 結構
+然後開啟 [http://127.0.0.1:5173](http://127.0.0.1:5173)。前端預設呼叫 `http://127.0.0.1:8090` 的 middleware；若使用其他 port，可以使用 query override，例如：
 
 ```text
-mock_backends/
-├── core/              # Clock、錯誤、JSON envelope、Repository、Idempotency
-├── one_account/       # 養老金、現金分享、政府／身份證明局取籌
-├── medical/           # FHIR-inspired 掛號、檢查／治療預約、Task
-└── social_welfare/    # referral 及 ElderlyActivitiesService
+http://127.0.0.1:5173/?middleware=http://127.0.0.1:18090
 ```
 
-每個 domain 都有獨立 service、fixture 和 HTTP adapter。service 使用 constructor injection 接收 repository interface，因此未來 MCP adapter 應直接調用 domain service，而不是直接讀寫文字檔或把業務邏輯放進 HTTP handler。
+## 主要服務與接口
 
-主要接口文件：
+| 服務 | 啟動入口 | 預設位置 | 說明 |
+| --- | --- | --- | --- |
+| Frontend | `python3 -m frontend.server` | `127.0.0.1:5173` | 對話、語音及服務工作區 |
+| Middleware | `python3 -m middleware.server` | `127.0.0.1:8090` | `/api/health`、`/api/interactions/*`、受控 MCP 呼叫 |
+| Mock Backend | `python3 -m mock_backends.server` | `127.0.0.1:8080` | One Account、Medical、Social Welfare HTTP mock |
+| MCP Server | `python3 -m MCP` | stdio | 固定 tool registry；通常由 middleware 管理 |
 
-- [一戶通 API](docs/api/one-account-api.md)
-- [鏡湖通醫療 Mock API](docs/api/jinghu-medical-mock-api.md)
-- [長者文娛活動 API](docs/api/elderly-cultural-activities-api.md)
-- [Social Welfare Arch-derived contract](mock_backends/social_welfare/README.md)
+Mock backend 的主要路徑包括：
 
-## 持久化
-
-使用 `--data-dir` 指定資料根目錄。建立的 mock state 會以 JSON Lines 格式保存於 `.txt` 文件：
-
-```text
-data/mock/
-├── one_account/
-│   ├── applications.txt
-│   ├── queue_tickets.txt
-│   └── idempotency.txt
-├── medical/
-│   ├── appointments.txt
-│   ├── tasks.txt
-│   └── idempotency.txt
-└── social_welfare/
-    ├── referrals.txt
-    ├── activity_registrations.txt
-    ├── phone_registration_assists.txt
-    ├── idempotency.txt
-    └── activity_idempotency.txt
-```
-
-這是 Demo 的簡化持久化媒介，不適合生產環境；更換為 SQL 或真正外部 API 時，只需替換 repository/client wiring，domain service 和 MCP tool contract 可以保留。
+- `/mock/one-account`
+- `/mock/medical/v1`
+- `/mock/elderly-activities/v1`
+- `/mock/social-welfare`
 
 ## 測試
 
+執行項目、MCP 及 middleware 測試：
+
 ```bash
-python -m unittest discover -s tests -v
-python -m compileall -q mock_backends tests
+python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s MCP/tests -v
+python3 -m unittest discover -s middleware/tests -v
+python3 -m compileall -q MCP middleware mock_backends frontend scripts tests
 ```
 
-HTTP smoke tests 會啟動 localhost socket；在受限環境中需要允許本地測試 socket。測試使用 temporary directory，不會寫入正式的 `data/mock`。
+測試只使用 localhost、temporary directories 及 mock data，不需要外部服務。HTTP smoke／integration tests 需要環境允許綁定 `127.0.0.1` 的 ephemeral socket。
+
+## Repository 結構
+
+```text
+Ponte/
+├── frontend/             前端 UI、語音能力及 middleware client
+├── middleware/           Interaction Controller、session、execution pipeline
+├── MCP/                  MCP stdio server、tool registry、REST adapter
+├── mock_backends/        一戶通、醫療、社福 mock domain services
+├── scripts/run_stack.py  一次啟動完整本地 Demo
+├── tests/                跨模組及 full-stack 測試
+└── docs/                 架構、產品、API、spec 及 implementation plans
+```
+
+## 文件索引
+
+- [Ponte 系統架構](docs/PonteArch.md)
+- [Ponte 產品定位與公共服務平台說明](docs/Ponte公共服務平台.md)
+- [Frontend README](frontend/README.md)
+- [Middleware README](middleware/README.md)
+- [MCP／工具轉接層 README](MCP/README.md)
+- [Mock Backends README](mock_backends/README.md)
+- [一戶通 Mock API](docs/api/one-account-api.md)
+- [鏡湖通醫療 Mock API](docs/api/jinghu-medical-mock-api.md)
+- [長者文娛活動 API](docs/api/elderly-cultural-activities-api.md)
+- [Social Welfare contract README](mock_backends/social_welfare/README.md)
+
+## 邊界與安全提醒
+
+Ponte Demo 不執行真實身份驗證、醫療判斷、付款、電話撥出或政府服務提交。需要確認的操作必須由上層流程提供 `confirmation`／`consent`；adapter 不會自行跳過確認，也不應把這套 mock contract 當成正式服務 API。
