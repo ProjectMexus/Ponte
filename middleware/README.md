@@ -1,6 +1,6 @@
 # Ponte Middleware
 
-Ponte middleware 是前端唯一需要呼叫的 HTTP bridge。它以 Python 標準庫提供固定 API，將 Interaction Controller 的醫療預約流程接到既有 21 個 MCP tools；runtime 會由 middleware 啟動一個 `python3 -m MCP` stdio child，再由 MCP 的 RestAdapter 連接 mock backend。前端不需要知道 backend URL、HTTP method、headers 或 MCP envelope。
+Ponte middleware 是前端唯一需要呼叫的 HTTP bridge。它以 Python 標準庫提供固定 API，將 Interaction Controller 的醫療查詢及預約流程接到既有 21 個 MCP tools；runtime 會由 middleware 啟動一個 `python3 -m MCP` stdio child，再由 MCP 的 RestAdapter 連接 mock backend。前端不需要知道 backend URL、HTTP method、headers 或 MCP envelope。
 
 ## 啟動
 
@@ -30,7 +30,7 @@ python3 -m middleware.server --host 127.0.0.1 --port 8090
 python3 scripts/run_stack.py
 ```
 
-這個 runner 會啟動 backend、middleware、middleware 管理的 MCP stdio server 和 frontend。瀏覽器輸入「我想查詢醫療預約」後，應看到 `selecting_service`、服務已連線，以及兩個 medical tool events。也可以輸入「我想查現金分享計劃」或「我想找長者文娛活動」測試只讀的一戶通／長者活動 workflow。
+這個 runner 會啟動 backend、middleware、middleware 管理的 MCP stdio server 和 frontend。瀏覽器輸入「我想查詢自己的醫療預約」後，應看到完成狀態、服務已連線，以及只讀的 `medical.get_my_appointments` tool event。輸入「我想預約醫療服務」則會進入服務選擇、日期範圍、可預約時段及確認流程；確認後可再用前一個查詢讀回 mock backend 的預約記錄。也可以輸入「我想查現金分享計劃」或「我想找長者文娛活動」測試只讀的一戶通／長者活動 workflow。
 
 檢查 middleware 和 backend：
 
@@ -40,7 +40,7 @@ curl http://127.0.0.1:8090/api/health
 
 `/api/health` 會實際呼叫 `medical.list_departments`；bridge 本身仍然運作但 backend 未啟動時，HTTP 仍回 200，`backend_reachable` 會是 `false`。session state 只保存在記憶體，middleware 重啟後會遺失。
 
-Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_URL`，middleware 會優先使用 OpenAI-compatible chat-completions API；LLM 未設定、回應格式錯誤或網絡呼叫失敗時，會自動 fallback 到 keyword recognizer。
+Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_URL`，middleware 會優先使用 OpenAI-compatible chat-completions API；使用 Gemini 時，請設定 `PONTE_LLM_API_URL=https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` 及 `PONTE_LLM_MODEL=gemini-2.5-flash-lite`，再在本地填入 Google AI Studio API key。LLM 未設定、回應格式錯誤或網絡呼叫失敗時，會自動 fallback 到 keyword recognizer；API key 不應寫入 repository。
 
 ## 環境設定
 
@@ -51,9 +51,9 @@ Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_UR
 | `PONTE_PATIENT_ID` | `PAT-DEMO-001` | Interaction Controller 使用的 mock patient context。 |
 | `PONTE_MOCK_USER_ID` | `USR-DEMO-001` | 一戶通及長者活動 workflow 使用的 mock user context。 |
 | `PONTE_AUTHORIZATION` | `Bearer mock-user-token` | Interaction Controller 使用的 mock authorization context。 |
-| `PONTE_LLM_API_URL` | 空值 | LLM intent endpoint，例如 `https://api.example.com/v1/chat/completions`；未設定時只使用 keyword。 |
+| `PONTE_LLM_API_URL` | 空值 | LLM intent endpoint；Gemini 示例為 `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`，未設定時只使用 keyword。 |
 | `PONTE_LLM_API_KEY` | 空值 | LLM API bearer token；不要寫入 repository。 |
-| `PONTE_LLM_MODEL` | `gpt-4o-mini` | LLM 使用的 model 名稱。 |
+| `PONTE_LLM_MODEL` | `gpt-4o-mini` | LLM 使用的 model 名稱；`.env.example` 示範 `gemini-2.5-flash-lite`。 |
 
 ## HTTP API
 
@@ -87,12 +87,14 @@ Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_UR
 ```json
 {
   "session_id": "demo-session-1",
-  "message": "我想查詢醫療預約",
+  "message": "我想查詢自己的醫療預約",
   "source": "text"
 }
 ```
 
-`source` 可為 `text` 或 `voice`。辨識到醫療意圖後，controller 會依序查詢我的預約和可預約服務；辨識到現金分享或長者活動意圖後，會執行對應的只讀查詢。三種 workflow 都會回傳 `task_state`、`current_step`、`steps`、`tool_events`、`actions` 和 `data`。
+`source` 可為 `text` 或 `voice`。醫療意圖分為兩條流程：輸入「我想查詢自己的醫療預約」只會呼叫 `medical.get_my_appointments`，返回自己的預約記錄並完成，不會搜尋服務或改變 mock state；輸入「我想預約醫療服務」才會初始化服務選擇。所有 workflow 都會回傳 `task_state`、`current_step`、`steps`、`tool_events`、`actions` 和 `data`。
+
+預約流程會先返回可預約服務。前端選擇服務和日期範圍後，透過 `search_slots` 呼叫 `medical.search_appointment_slots`；可預約時段會出現在回應的 `data.slots`。選擇一個時段後，只有再收到明確的 `confirm` action，middleware 才會呼叫 `medical.create_appointment` 並將記錄寫入 mock backend。之後用「我想查詢自己的醫療預約」即可讀回該記錄。
 
 可直接輸入以下訊息測試自然語言 workflow：
 

@@ -10,7 +10,7 @@ Ponte 是一個面向長者的公共服務入口與任務執行 Demo。使用者
 - Middleware 是前端唯一需要呼叫的 HTTP bridge，負責 interaction controller、session state 和 MCP process 管理。
 - MCP 轉接層以 stdio JSON-RPC 暴露固定的 21 個工具，將受控 tool call 轉為 mock backend HTTP request。
 - Mock backends 目前包含一戶通、醫療、社會福利及長者文娛活動 domain。
-- 目前前端自然語言端到端流程支援「查詢醫療預約」、「查現金分享計劃」及「搜尋長者文娛活動」；其他 domain 可透過 MCP／API contract 和診斷接口測試。
+- 目前前端自然語言端到端流程支援「我想查詢自己的醫療預約」的唯讀預約查詢，以及「我想預約醫療服務」的預約流程；預約時會查詢服務、日期範圍和可預約時段，確認後寫入 mock backend，之後可再查詢讀回記錄。其他 domain 可透過 MCP／API contract 和診斷接口測試。
 
 ## 架構
 
@@ -39,19 +39,29 @@ mock_backends/           One Account / Medical / Social Welfare
 cp .env.example .env
 ```
 
+要使用 Gemini 做 LLM intent recognition，請在本地 `.env` 填入 Google AI Studio API key。`.env.example` 已示範 Ponte 所需的 OpenAI-compatible endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` 及低成本模型 `gemini-2.5-flash-lite`；API key 只放在本地設定，不要提交到 repository。若 `PONTE_LLM_API_URL` 留空，middleware 會只使用 keyword intent recognition。
+
 在 repository 根目錄執行完整 stack：
 
 ```bash
 python3 scripts/run_stack.py
 ```
 
-Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio server 及 frontend，並使用 temporary data directory。看到 `Ponte stack is ready.` 後，開啟它列出的 Frontend URL，輸入：
+Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio server 及 frontend，並使用 temporary data directory。看到 `Ponte stack is ready.` 後，開啟它列出的 Frontend URL，輸入以下唯讀查詢：
 
 ```text
-我想查詢醫療預約
+我想查詢自己的醫療預約
 ```
 
-成功時畫面會顯示 middleware 已連線、`selecting_service` 狀態，以及 `medical.get_my_appointments` 和 `medical.list_appointment_services` 兩個 tool events。按 `Ctrl-C` 會關閉整個 stack。
+成功時畫面會顯示 middleware 已連線、完成狀態，以及只讀的 `medical.get_my_appointments` tool event；這個查詢不會載入服務、不會搜尋時段，也不會建立預約。
+
+要測試醫療預約流程，輸入：
+
+```text
+我想預約醫療服務
+```
+
+前端會先取得可預約服務；選擇服務及日期範圍後，middleware 會呼叫 `medical.search_appointment_slots` 並返回可預約時段。選擇時段並明確確認後，mock backend 才會建立預約記錄。完成後再次輸入「我想查詢自己的醫療預約」，即可從 mock backend 讀回剛建立的預約。按 `Ctrl-C` 會關閉整個 stack。
 
 也可以在前端輸入以下兩個只讀需求，直接測試 middleware → MCP → mock backend 的完整路徑：
 
