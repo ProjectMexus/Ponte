@@ -32,7 +32,7 @@
 - Keeps `log_event(component: str, event: str, **fields: object) -> None` unchanged for INFO safe summaries.
 - `log_debug_event` accepts only debug content fields (`request_id`, `model`, `endpoint`, `prompt`, `response`, `request`, `result`, `intent`, `confidence`, `latency_ms`, `operation`, `tool`, `outcome`, `error_code`, `error_type`) and drops unknown fields.
 
-- [ ] **Step 1: Write failing logger tests**
+- [x] **Step 1: Write failing logger tests**
 
 Add tests to `tests/test_ponte_logging.py` that specify the exact level boundary and redaction contract:
 
@@ -68,7 +68,7 @@ def test_debug_event_shows_content_and_masks_nested_credentials(self):
 
 Also add a test that an unknown field containing a medical marker is dropped and a logger failure does not escape.
 
-- [ ] **Step 2: Run the focused tests and verify they fail**
+- [x] **Step 2: Run the focused tests and verify they fail**
 
 Run:
 
@@ -78,7 +78,7 @@ python3 -m unittest tests.test_ponte_logging -v
 
 Expected: FAIL because `log_debug_event` is not exported or implemented.
 
-- [ ] **Step 3: Implement the minimal DEBUG logger API**
+- [x] **Step 3: Implement the minimal DEBUG logger API**
 
 In `ponte_logging.py`:
 
@@ -94,7 +94,7 @@ In `ponte_logging.py`:
 
 Do not reuse `_safe_scalar` for content values because it would truncate or discard structured medical payloads. Never include raw exception messages in this helper.
 
-- [ ] **Step 4: Run focused tests and verify they pass**
+- [x] **Step 4: Run focused tests and verify they pass**
 
 Run:
 
@@ -104,7 +104,7 @@ python3 -m unittest tests.test_ponte_logging -v
 
 Expected: PASS, including all existing INFO allowlist, path-redaction, level, stderr, and logger-failure tests.
 
-- [ ] **Step 5: Commit the logger unit**
+- [x] **Step 5: Commit the logger unit**
 
 ```bash
 git add ponte_logging.py tests/test_ponte_logging.py
@@ -121,7 +121,7 @@ git commit -m "feat: add debug terminal logging boundary"
 - Consumes `log_debug_event` from `ponte_logging.py`.
 - Produces no new public API; `LlmIntentRecognizer.recognize(message: str) -> IntentDecision` remains unchanged.
 
-- [ ] **Step 1: Write failing LLM DEBUG tests**
+- [x] **Step 1: Write failing LLM DEBUG tests**
 
 Add tests that capture logger output under both levels:
 
@@ -152,7 +152,7 @@ def test_llm_debug_content_is_hidden_at_info(self):
     # marker appears while safe send/receive summaries still do.
 ```
 
-- [ ] **Step 2: Run the focused LLM tests and verify they fail**
+- [x] **Step 2: Run the focused LLM tests and verify they fail**
 
 Run:
 
@@ -162,7 +162,7 @@ python3 -m unittest middleware.tests.test_intent -v
 
 Expected: FAIL because the recognizer does not emit `prompt=` or `response=` DEBUG events.
 
-- [ ] **Step 3: Add LLM DEBUG calls around the existing transport boundary**
+- [x] **Step 3: Add LLM DEBUG calls around the existing transport boundary**
 
 Import `log_debug_event` alongside `endpoint_label` and `log_event`.
 
@@ -183,7 +183,7 @@ After `_transport` returns and after `_parse_response` succeeds, emit a `receive
 
 The debug helper performs redaction and level gating; the recognizer must not manually serialize or print content. Preserve the existing exception conversion and fallback behavior.
 
-- [ ] **Step 4: Run LLM tests and verify they pass**
+- [x] **Step 4: Run LLM tests and verify they pass**
 
 Run:
 
@@ -193,7 +193,7 @@ python3 -m unittest middleware.tests.test_intent -v
 
 Expected: PASS, including existing safe-summary negative assertions and the new DEBUG/INFO boundary tests.
 
-- [ ] **Step 5: Commit the LLM unit**
+- [x] **Step 5: Commit the LLM unit**
 
 ```bash
 git add middleware/intent.py middleware/tests/test_intent.py
@@ -210,7 +210,7 @@ git commit -m "feat: log llm debug prompt and response"
 - Consumes `log_debug_event` from `ponte_logging.py`.
 - Keeps `McpStdioClient.start()`, `call_tool(name: str, arguments: Mapping[str, Any]) -> dict[str, Any]`, and JSON-RPC stdout behavior unchanged.
 
-- [ ] **Step 1: Write failing MCP DEBUG tests**
+- [x] **Step 1: Write failing MCP DEBUG tests**
 
 Add a test using the existing `FakeProcess` that sets `PONTE_LOG_LEVEL=DEBUG`, calls `medical.list_departments` or another medical tool with a visible medical marker plus a nested authorization marker, and asserts:
 
@@ -225,7 +225,7 @@ self.assertIn("<redacted>", output)
 
 Add an INFO-level test (or extend the existing safe test) asserting that the same JSON-RPC strings and medical values remain absent at INFO.
 
-- [ ] **Step 2: Run the focused MCP tests and verify they fail**
+- [x] **Step 2: Run the focused MCP tests and verify they fail**
 
 Run:
 
@@ -235,7 +235,7 @@ python3 -m unittest middleware.tests.test_mcp_client -v
 
 Expected: FAIL because no debug JSON-RPC fields are currently emitted.
 
-- [ ] **Step 3: Add DEBUG calls around each outbound/inbound JSON-RPC pair**
+- [x] **Step 3: Add DEBUG calls around each outbound/inbound JSON-RPC pair**
 
 Import `log_debug_event`.
 
@@ -245,7 +245,7 @@ In `call_tool()`, assign the tools/call mapping to a local mapping, emit `send_d
 
 The `log_debug_event` calls must not change `stderr=subprocess.DEVNULL`, `_write`, `_read_response`, or the MCP JSON-RPC stream.
 
-- [ ] **Step 4: Run MCP tests and verify they pass**
+- [x] **Step 4: Run MCP tests and verify they pass**
 
 Run:
 
@@ -255,7 +255,7 @@ python3 -m unittest middleware.tests.test_mcp_client -v
 
 Expected: PASS, including protocol, timeout, tool-error, safe INFO, and DEBUG redaction tests.
 
-- [ ] **Step 5: Commit the MCP unit**
+- [x] **Step 5: Commit the MCP unit**
 
 ```bash
 git add middleware/mcp_client.py middleware/tests/test_mcp_client.py
@@ -273,7 +273,7 @@ git commit -m "feat: log mcp debug request and response"
 **Interfaces:**
 - Documents the existing `PONTE_LOG_LEVEL` variable; no new environment variable is introduced.
 
-- [ ] **Step 1: Update documentation assertions first**
+- [x] **Step 1: Update documentation assertions first**
 
 Change `tests/test_run_stack.py::test_terminal_logging_configuration_is_documented` so it expects DEBUG guidance instead of the old claim that higher levels can never show LLM content:
 
@@ -286,7 +286,7 @@ self.assertIn("API key", document)
 self.assertIn("INFO", document)
 ```
 
-- [ ] **Step 2: Run the documentation test and verify it fails**
+- [x] **Step 2: Run the documentation test and verify it fails**
 
 Run:
 
@@ -296,7 +296,7 @@ python3 -m unittest tests.test_run_stack.RunStackTests.test_terminal_logging_con
 
 Expected: FAIL because the existing documents still describe safe-only logging at all levels.
 
-- [ ] **Step 3: Update `.env.example` and both READMEs**
+- [x] **Step 3: Update `.env.example` and both READMEs**
 
 Keep `PONTE_LOG_LEVEL=INFO` in `.env.example` and add a comment that `DEBUG` is for a controlled local terminal only. In both READMEs, replace the safe-only/higher-level claim with:
 
@@ -306,7 +306,7 @@ PONTE_LOG_LEVEL=DEBUG python3 scripts/run_stack.py
 
 Explain that INFO shows safe summaries, DEBUG shows full LLM prompt/response and MCP request/response including medical data, HTTP bodies remain excluded, and API key/Authorization/Cookie/token fields remain masked. Include the command to return to INFO and retain the existing component grep example.
 
-- [ ] **Step 4: Run documentation tests and verify they pass**
+- [x] **Step 4: Run documentation tests and verify they pass**
 
 Run:
 
@@ -316,7 +316,7 @@ python3 -m unittest tests.test_run_stack -v
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the documentation unit**
+- [x] **Step 5: Commit the documentation unit**
 
 ```bash
 git add .env.example README.md middleware/README.md tests/test_run_stack.py
@@ -328,7 +328,7 @@ git commit -m "docs: explain debug terminal content logging"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-08-04-debug-terminal-observability.md`
 
-- [ ] **Step 1: Run focused tests for all changed behavior**
+- [x] **Step 1: Run focused tests for all changed behavior**
 
 ```bash
 python3 -m unittest tests.test_ponte_logging middleware.tests.test_intent middleware.tests.test_mcp_client tests.test_run_stack -q
@@ -336,7 +336,7 @@ python3 -m unittest tests.test_ponte_logging middleware.tests.test_intent middle
 
 Expected: all focused tests pass.
 
-- [ ] **Step 2: Run all repository test suites**
+- [x] **Step 2: Run all repository test suites**
 
 ```bash
 PONTE_LOG_LEVEL=INFO python3 -m unittest discover -s tests -q
@@ -346,7 +346,7 @@ PONTE_LOG_LEVEL=INFO python3 -m unittest discover -s middleware/tests -q
 
 Expected: all existing suites pass, including HTTP and JSON-RPC integration tests.
 
-- [ ] **Step 3: Run static checks**
+- [x] **Step 3: Run static checks**
 
 ```bash
 python3 -m compileall -q MCP middleware mock_backends frontend scripts tests
@@ -356,11 +356,11 @@ git diff --check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 4: Run a DEBUG smoke check**
+- [x] **Step 4: Run a DEBUG smoke check**
 
 Use the existing fake-transport unit tests or start the local stack with `PONTE_LOG_LEVEL=DEBUG`, issue one medical intent and one MCP medical call, and verify terminal output contains `prompt=`, `response=`, JSON-RPC `request/response`, and the medical marker while excluding the configured API key and Authorization token.
 
-- [ ] **Step 5: Mark completed steps and commit the plan update**
+- [x] **Step 5: Mark completed steps and commit the plan update**
 
 Mark each completed checkbox in this plan with `x`, record the exact test commands/results in the final handoff, then commit only the plan update if it is not already included in the final implementation commit:
 
