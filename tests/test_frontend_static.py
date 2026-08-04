@@ -118,6 +118,10 @@ class FrontendStaticTests(unittest.TestCase):
             'createElement("details")',
             "medical_query",
             "appointments",
+            "awaiting_user_input",
+            "renderRecovery",
+            "recovery.explanation",
+            "onAction(action, task.localId)",
         ):
             self.assertIn(marker, source)
         self.assertNotIn("taskRoot.replaceChildren()", source)

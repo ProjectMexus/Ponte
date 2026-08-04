@@ -508,11 +508,11 @@ git commit -m "feat: keep recoverable workflow errors open"
 - Consumes: `TaskResponse.recovery`, `TaskResponse.actions`, and existing `onAction(action, taskId)` routing.
 - Produces: accessible recovery panel and same-task recovery action behavior.
 
-- [ ] **Step 1: Add non-terminal state labels and static contracts**
+- [x] **Step 1: Add non-terminal state labels and static contracts**
 
 Add `awaiting_user_input` to `TASK_STATE_LABELS` with a friendly label such as `需要你的協助`, and keep it out of `TERMINAL_TASK_STATES`. Add static assertions for the label, the absence of terminal classification, and the `recovery` field handling.
 
-- [ ] **Step 2: Implement `renderRecovery()`**
+- [x] **Step 2: Implement `renderRecovery()`**
 
 Add a renderer that creates user-facing text nodes only:
 
@@ -532,15 +532,15 @@ function renderRecovery(container, recovery) {
 
 Do not render `reason_code`, field `name`, payload values, error details or any unknown recovery object keys. Render actions through the existing `renderActions()` so `onAction(action, task.localId)` remains the only route.
 
-- [ ] **Step 3: Keep recovery cards open and preserve existing actions**
+- [x] **Step 3: Keep recovery cards open and preserve existing actions**
 
 In `renderTaskList()`, append the recovery panel before the action list. Only call `renderActions()` when the response state is not terminal; `awaiting_user_input` must therefore show recovery options. Keep `failTask()` for transport errors and leave global error behavior unchanged.
 
-- [ ] **Step 4: Add responsive recovery styles**
+- [x] **Step 4: Add responsive recovery styles**
 
 Add `.recovery-panel`, `.recovery-title`, `.recovery-explanation`, and `.recovery-field` styles using existing color variables, focus rules and mobile spacing. Do not shrink existing action controls below their current touch target size.
 
-- [ ] **Step 5: Update frontend static tests and syntax-check**
+- [x] **Step 5: Update frontend static tests and syntax-check**
 
 Add assertions for:
 
@@ -559,7 +559,7 @@ node --check frontend/app.js
 node --check frontend/interaction-view.js
 ```
 
-- [ ] **Step 6: Commit frontend recovery rendering**
+- [x] **Step 6: Commit frontend recovery rendering**
 
 ```powershell
 git add frontend/interaction-view.js frontend/styles.css tests/test_frontend_static.py

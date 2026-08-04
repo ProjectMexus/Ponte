@@ -428,6 +428,34 @@ textarea::placeholder {
   padding: 0 18px 18px;
 }
 
+.recovery-content {
+  display: grid;
+  gap: 10px;
+}
+
+.recovery-panel {
+  padding: 16px 18px;
+  border: 1px solid #e7c68e;
+  border-radius: 14px;
+  color: var(--teal-900);
+  background: #fff9ed;
+}
+
+.recovery-title {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.recovery-explanation,
+.recovery-field {
+  margin: 6px 0 0;
+}
+
+.recovery-field {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .task-summary {
   display: flex;
   justify-content: space-between;

@@ -4,6 +4,7 @@ const TASK_STATE_LABELS = {
   selecting_service: "請選擇服務",
   selecting_slot: "請選擇時段",
   awaiting_confirmation: "等待你的確認",
+  awaiting_user_input: "需要你的協助",
   submitted: "已提交，正在等待服務回覆",
   completed: "已完成",
   cancelled: "已取消",
@@ -45,6 +46,9 @@ function taskTeaser(task) {
   }
   if (response.task_state === "completed") return "服務已完成";
   if (response.task_state === "cancelled") return "這次服務已取消";
+  if (response.task_state === "awaiting_user_input") {
+    return response.recovery?.explanation || "需要你的協助才能繼續";
+  }
   if (task.status === "failed") return "需要再試一次";
   return TASK_STATE_LABELS[response.task_state] || "等待下一步操作";
 }
@@ -530,6 +534,22 @@ function renderActions(container, response, onAction) {
   renderGenericActions(container, response?.actions, onAction);
 }
 
+function renderRecovery(container, recovery) {
+  if (!recovery || typeof recovery !== "object") return;
+  const panel = createElement("section", "recovery-panel");
+  panel.setAttribute("role", "status");
+  panel.append(createElement("h3", "recovery-title", "下一步怎樣做"));
+  if (typeof recovery.explanation === "string" && recovery.explanation) {
+    panel.append(createElement("p", "recovery-explanation", recovery.explanation));
+  }
+  const fields = Array.isArray(recovery.required_fields) ? recovery.required_fields : [];
+  fields.forEach((field) => {
+    const label = typeof field?.label === "string" && field.label ? field.label : "必要資料";
+    panel.append(createElement("p", "recovery-field", `需要補充：${label}`));
+  });
+  container.append(panel);
+}
+
 export function createInteractionView({
   conversationRoot,
   healthRoot,
@@ -597,6 +617,12 @@ export function createInteractionView({
 
         if (response.error?.message) {
           body.append(createElement("div", "alert alert-error", response.error.message));
+        }
+
+        if (response.recovery) {
+          const recovery = createElement("div", "recovery-content");
+          renderRecovery(recovery, response.recovery);
+          body.append(recovery);
         }
 
         const actions = createElement("div", "action-list");
