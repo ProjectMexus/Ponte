@@ -204,7 +204,7 @@ class McpStdioClientTests(unittest.TestCase):
 
         self.assertEqual(result["appointment_id"], "APPOINTMENT-DEBUG-001")
         output = "\n".join(captured.output)
-        self.assertIn('"method":"tools/call"', output)
+        self.assertIn('"method": "tools/call"', output)
         self.assertIn("PATIENT-DEBUG-001", output)
         self.assertIn("APPOINTMENT-DEBUG-001", output)
         self.assertNotIn("BEARER_DEBUG_TOKEN", output)
@@ -238,7 +238,7 @@ class McpStdioClientTests(unittest.TestCase):
                 )
 
         output = "\n".join(captured.output)
-        self.assertNotIn('"method":"tools/call"', output)
+        self.assertNotIn('"method": "tools/call"', output)
         self.assertNotIn("PATIENT-DEBUG-001", output)
         self.assertNotIn("APPOINTMENT-DEBUG-001", output)
         self.assertNotIn("request=", output)
