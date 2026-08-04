@@ -69,6 +69,20 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("tool_events", js)
         self.assertIn("actions", js)
 
+    def test_view_module_supports_medical_booking_action_contract(self):
+        source = Path("frontend/interaction-view.js").read_text(encoding="utf-8")
+        for marker in (
+            "selecting_service",
+            "date_from",
+            "date_to",
+            "service_id",
+            "selecting_slot",
+            "slot_id",
+        ):
+            self.assertIn(marker, source)
+        self.assertIn('kind: "search_slots"', source)
+        self.assertIn('kind: "select_slot"', source)
+
     def test_speech_module_has_fallback_and_cantonese_locale(self):
         js = Path("frontend/speech.js").read_text(encoding="utf-8")
         self.assertIn("SpeechRecognition", js)

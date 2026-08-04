@@ -117,8 +117,34 @@ function renderToolEvents(container, toolEvents) {
   });
 }
 
-function renderActions(container, actions, onAction) {
-  container.replaceChildren();
+function inputDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function createDateField(label, name, value) {
+  const field = createElement("label", "date-field");
+  field.append(createElement("span", "date-field-label", label));
+  const input = createElement("input");
+  input.type = "date";
+  input.name = name;
+  input.value = value;
+  field.append(input);
+  return input;
+}
+
+function slotLabel(slot) {
+  if (slot.label) return asText(slot.label);
+  const start = displayDate(slot.start);
+  const end = displayDate(slot.end);
+  if (start !== "—" && end !== "—") return `${start} — ${end}`;
+  if (start !== "—") return start;
+  return asText(slot.id);
+}
+
+function renderGenericActions(container, actions, onAction) {
   (actions || []).forEach((action) => {
     const kind = action.kind || action.id || "action";
     const button = createElement("button", "action-button", action.label || "繼續");
@@ -128,6 +154,63 @@ function renderActions(container, actions, onAction) {
     button.addEventListener("click", () => onAction(action));
     container.append(button);
   });
+}
+
+function renderActions(container, response, onAction) {
+  container.replaceChildren();
+  const data = response?.data && typeof response.data === "object" ? response.data : {};
+  const selectingService = response?.current_step === "select_service" || response?.task_state === "selecting_service";
+  if (selectingService) {
+    const today = new Date();
+    const dateRange = createElement("div", "date-range-controls");
+    const dateFrom = createDateField("開始日期", "date_from", inputDateValue(today));
+    const dateTo = createDateField("結束日期", "date_to", inputDateValue(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 14)));
+    dateRange.append(dateFrom.closest("label"), dateTo.closest("label"));
+    container.append(dateRange);
+
+    const choices = createElement("div", "service-choice-list");
+    const services = Array.isArray(data.services) ? data.services : [];
+    services.forEach((service) => {
+      const serviceName = asText(service.name || service.name_en || service.id);
+      const button = createElement("button", "action-button", serviceName);
+      button.type = "button";
+      button.addEventListener("click", () => onAction({
+        kind: "search_slots",
+        label: `搜尋${serviceName}時段`,
+        payload: {
+          service_id: service.id,
+          date_from: dateFrom.value,
+          date_to: dateTo.value,
+        },
+      }));
+      choices.append(button);
+    });
+    if (services.length === 0) choices.append(createElement("div", "empty-workspace", "目前沒有可預約服務。"));
+    container.append(choices);
+    return;
+  }
+
+  const selectingSlot = response?.current_step === "select_slot" || response?.task_state === "selecting_slot";
+  if (selectingSlot) {
+    const choices = createElement("div", "slot-choice-list");
+    const slots = Array.isArray(data.slots) ? data.slots : [];
+    slots.forEach((slot) => {
+      const label = slotLabel(slot);
+      const button = createElement("button", "action-button", label);
+      button.type = "button";
+      button.addEventListener("click", () => onAction({
+        kind: "select_slot",
+        label: `選擇${label}`,
+        payload: {slot_id: slot.id},
+      }));
+      choices.append(button);
+    });
+    if (slots.length === 0) choices.append(createElement("div", "empty-workspace", "目前沒有可預約時段。"));
+    container.append(choices);
+    return;
+  }
+
+  renderGenericActions(container, response?.actions, onAction);
 }
 
 export function createInteractionView({
@@ -158,7 +241,7 @@ export function createInteractionView({
     taskRoot.replaceChildren();
     renderData(taskRoot, response.data);
     renderToolEvents(taskRoot, response.tool_events);
-    renderActions(actionsRoot, response.actions, onAction);
+    renderActions(actionsRoot, response, onAction);
     clearError();
   }
 
