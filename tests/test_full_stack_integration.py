@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.request import ProxyHandler, Request, build_opener
 
 from frontend.server import create_http_server as create_frontend_http_server
+from middleware.intent import KeywordIntentRecognizer
 from middleware.server import create_application, create_http_server
 from mock_backends.server import create_http_server as create_backend_http_server
 
@@ -29,6 +30,7 @@ class FullStackIntegrationTests(unittest.TestCase):
             f"http://127.0.0.1:{self.backend.server_port}",
             "PAT-DEMO-001",
             "Bearer mock-user-token",
+            intent_recognizer=KeywordIntentRecognizer(),
         )
         self.middleware = create_http_server(
             "127.0.0.1",
@@ -90,7 +92,7 @@ class FullStackIntegrationTests(unittest.TestCase):
             "/api/interactions/message",
             {
                 "session_id": "BROWSER-SMOKE-1",
-                "message": "我想查詢醫療預約",
+                "message": "我想查詢自己的醫療預約",
                 "source": "text",
             },
         )
@@ -98,13 +100,10 @@ class FullStackIntegrationTests(unittest.TestCase):
         self.assertIn("公共服務助手", html)
         self.assertIn("MiddlewareClient", client_js)
         self.assertTrue(health["backend_reachable"])
-        self.assertEqual(response["task_state"], "selecting_service")
+        self.assertEqual(response["task_state"], "completed")
         self.assertEqual(
             [event["tool_name"] for event in response["tool_events"]],
-            [
-                "medical.get_my_appointments",
-                "medical.list_appointment_services",
-            ],
+            ["medical.get_my_appointments"],
         )
 
         process = self.middleware_app.mcp_client.process

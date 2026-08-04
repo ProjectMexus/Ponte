@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
 
+from middleware.intent import KeywordIntentRecognizer
 from middleware.server import create_application, create_http_server
 from mock_backends.server import create_http_server as create_backend_http_server
 
@@ -35,6 +36,7 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
                 f"http://127.0.0.1:{self.backend.server_port}",
                 "PAT-DEMO-001",
                 "Bearer mock-user-token",
+                intent_recognizer=KeywordIntentRecognizer(),
             ),
         )
         self.middleware_thread = threading.Thread(target=self.middleware.serve_forever, daemon=True)
@@ -52,7 +54,7 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
         response = post_json(
             self.opener,
             f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/message",
-            {"session_id": "S-1", "message": "我想查詢醫療預約", "source": "text"},
+            {"session_id": "S-1", "message": "我想預約醫療服務", "source": "text"},
         )
         self.assertEqual(response["session_id"], "S-1")
         self.assertEqual(response["task_state"], "selecting_service")
@@ -95,6 +97,23 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
         create_event = next(event for event in final_response["tool_events"] if event["tool_name"] == "medical.create_appointment")
         self.assertTrue(create_event["arguments"]["input"]["consent"])
         self.assertNotIn("confirmation", create_event["arguments"]["input"])
+        appointment_id = create_event["data"]["data"]["id"]
+
+        queried = post_json(
+            self.opener,
+            f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/message",
+            {
+                "session_id": "S-QUERY-AFTER-BOOKING",
+                "message": "我想查詢自己的醫療預約",
+                "source": "text",
+            },
+        )
+        self.assertEqual(queried["task_state"], "completed")
+        self.assertEqual(
+            [event["tool_name"] for event in queried["tool_events"]],
+            ["medical.get_my_appointments"],
+        )
+        self.assertIn(appointment_id, [item["id"] for item in queried["data"]["appointments"]])
 
         cancelled = post_json(
             self.opener,
