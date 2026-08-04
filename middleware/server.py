@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Type
 from urllib.parse import urlsplit
 
 from MCP.registry import build_registry
+from ponte_logging import log_event
 
 from .contracts import InteractionActionRequest, InteractionRequest, ToolCall, ToolExecutionResult
 from .config import load_dotenv
@@ -139,11 +141,16 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
         server_version = "PonteMiddleware/1.0"
 
         def _send_json(self, status: int, payload: dict[str, Any] | None) -> None:
-            raw = b"" if payload is None else json.dumps(
-                payload,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode("utf-8")
+            self._response_status = status
+            try:
+                raw = b"" if payload is None else json.dumps(
+                    payload,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            except Exception:
+                self._response_status = 500
+                raise
             self.send_response(status)
             self._cors_headers()
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -188,11 +195,21 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
             return value
 
         def _handle(self) -> None:
-            if self.command == "OPTIONS":
-                self._send_json(204, None)
-                return
+            request_id = f"HTTP-MW-{uuid.uuid4().hex[:12].upper()}"
+            path = urlsplit(self.path).path
+            started_at = time.monotonic()
+            self._response_status = 500
+            log_event(
+                "middleware",
+                "request_start",
+                method=self.command,
+                path=path,
+                request_id=request_id,
+            )
             try:
-                path = urlsplit(self.path).path
+                if self.command == "OPTIONS":
+                    self._send_json(204, None)
+                    return
                 if self.command == "GET":
                     payload = self._get(path)
                     self._send_json(200, payload)
@@ -210,6 +227,16 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
                 self._send_error(ClientRequestError(400, "INVALID_REQUEST", str(error)))
             except Exception:
                 self._send_error(ClientRequestError(500, "MIDDLEWARE_ERROR", "Middleware 暫時不可用。"))
+            finally:
+                log_event(
+                    "middleware",
+                    "request_end",
+                    method=self.command,
+                    path=path,
+                    request_id=request_id,
+                    status=self._response_status,
+                    latency_ms=(time.monotonic() - started_at) * 1000,
+                )
 
         def _get(self, path: str) -> dict[str, Any]:
             if path == "/api/health":

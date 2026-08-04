@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from typing import Any
+
+from ponte_logging import log_event
 
 
 class _StaticRequestHandler(SimpleHTTPRequestHandler):
@@ -22,6 +25,41 @@ class _StaticRequestHandler(SimpleHTTPRequestHandler):
         if candidate != self.root and self.root not in candidate.parents:
             return str(self.root / "__ponte_missing_file__")
         return str(candidate)
+
+    def handle_one_request(self) -> None:
+        self._request_started_at = time.monotonic()
+        self._request_log_code = None
+        self._request_log_size = "-"
+        self._response_bytes = None
+        try:
+            super().handle_one_request()
+        finally:
+            if self._request_log_code is not None:
+                log_event(
+                    "frontend",
+                    "request_end",
+                    method=getattr(self, "command", ""),
+                    path=urlsplit(getattr(self, "path", "")).path,
+                    status=self._request_log_code,
+                    bytes=self._response_bytes if self._response_bytes is not None else self._request_log_size,
+                    latency_ms=(time.monotonic() - self._request_started_at) * 1000,
+                )
+
+    def log_request(self, code: int | str, size: int | str = "-") -> None:
+        self._request_log_code = code
+        self._request_log_size = size
+
+    def send_header(self, keyword: str, value: str) -> None:
+        if keyword.lower() == "content-length":
+            try:
+                self._response_bytes = int(value)
+            except (TypeError, ValueError):
+                self._response_bytes = value
+        super().send_header(keyword, value)
+
+    def end_headers(self) -> None:
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
 
     def log_message(self, format: str, *args: Any) -> None:
         return

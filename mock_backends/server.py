@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -26,6 +28,10 @@ from mock_backends.social_welfare.activity_backend import ElderlyActivitiesBacke
 from mock_backends.social_welfare.activity_service import ElderlyActivitiesService
 from mock_backends.social_welfare.backend import SocialWelfareBackend
 from mock_backends.social_welfare.service import SocialWelfareService
+from ponte_logging import log_event
+
+
+_MIDDLEWARE_REQUEST_ID = re.compile(r"^REQ-MW-[0-9A-F]{12}$")
 
 
 def create_application(data_dir: str | Path, clock: Clock | None = None) -> MockRouter:
@@ -91,7 +97,13 @@ def make_request_handler(router: MockRouter) -> Type[BaseHTTPRequestHandler]:
             return _header(headers, "X-Request-Id") or f"REQ-{uuid.uuid4().hex[:12].upper()}"
 
         def _send(self, response: BackendResponse) -> None:
-            raw = json.dumps(response.body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            self._response_status = response.status
+            try:
+                raw = json.dumps(response.body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            except Exception:
+                self._response_status = 500
+                raise
+            self._response_bytes = len(raw)
             self.send_response(response.status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(raw)))
@@ -127,8 +139,24 @@ def make_request_handler(router: MockRouter) -> Type[BaseHTTPRequestHandler]:
         def _handle(self) -> None:
             headers = {key: value for key, value in self.headers.items()}
             request_id = self._request_id(headers)
+            log_request_id = (
+                request_id
+                if _MIDDLEWARE_REQUEST_ID.fullmatch(request_id)
+                else f"HTTP-BE-{uuid.uuid4().hex[:12].upper()}"
+            )
+            parsed = urlsplit(self.path)
+            path = parsed.path
+            started_at = time.monotonic()
+            self._response_status = 500
+            self._response_bytes = 0
+            log_event(
+                "backend",
+                "request_start",
+                method=self.command,
+                path=path,
+                request_id=log_request_id,
+            )
             try:
-                parsed = urlsplit(self.path)
                 body = self._body(request_id)
                 request = BackendRequest(
                     method=self.command,
@@ -143,6 +171,17 @@ def make_request_handler(router: MockRouter) -> Type[BaseHTTPRequestHandler]:
                 self._error_response(request_id, error)
             except Exception:
                 self._error_response(request_id, DomainError(500, "MOCK_SERVICE_ERROR", "Mock service 暫時不可用。", retryable=True))
+            finally:
+                log_event(
+                    "backend",
+                    "request_end",
+                    method=self.command,
+                    path=path,
+                    request_id=log_request_id,
+                    status=self._response_status,
+                    latency_ms=(time.monotonic() - started_at) * 1000,
+                    bytes=self._response_bytes,
+                )
 
         def do_GET(self) -> None:
             self._handle()
