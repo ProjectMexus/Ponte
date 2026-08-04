@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import os
 import re
 import sys
+from collections.abc import Mapping
 from urllib.parse import urlsplit
 
 
-__all__ = ["endpoint_label", "log_event"]
+__all__ = ["endpoint_label", "log_debug_event", "log_event"]
 
 
 _LOGGER = logging.getLogger("ponte")
@@ -39,6 +41,39 @@ _SUPPORTED_FIELDS = frozenset(
         "error_type",
     }
 )
+_DEBUG_FIELDS = frozenset(
+    {
+        "request_id",
+        "model",
+        "endpoint",
+        "prompt",
+        "response",
+        "request",
+        "result",
+        "intent",
+        "confidence",
+        "latency_ms",
+        "operation",
+        "tool",
+        "outcome",
+        "error_code",
+        "error_type",
+    }
+)
+_DEBUG_CREDENTIAL_KEYS = frozenset(
+    {
+        "authorization",
+        "cookie",
+        "set_cookie",
+        "api_key",
+        "access_token",
+        "refresh_token",
+        "client_secret",
+        "password",
+        "secret",
+        "token",
+    }
+)
 _HANDLER_MARKER = "_ponte_terminal_handler"
 _MAX_STRING_LENGTH = 120
 _MISSING = object()
@@ -46,6 +81,10 @@ _UUID_SEGMENT = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
 )
 _UPPERCASE_IDENTIFIER_SEGMENT = re.compile(r"^[A-Z0-9]+(?:-[A-Z0-9]+)+$")
+_BEARER_TEXT = re.compile(r'''(?i)\bBearer\s+[^\s,;}\]"']+''')
+_TOKEN_ASSIGNMENT_TEXT = re.compile(
+    r'''(?i)\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}\]"']+)'''
+)
 
 
 class _PonteStreamHandler(logging.StreamHandler):
@@ -157,6 +196,93 @@ def endpoint_label(url: str) -> str:
         return parsed.path[:_MAX_STRING_LENGTH]
     except Exception:
         return ""
+
+
+def _is_debug_credential_key(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = re.sub(r"[-_]+", "_", value.strip().lower())
+    if normalized in _DEBUG_CREDENTIAL_KEYS:
+        return True
+    return normalized.endswith(
+        (
+            "_access_token",
+            "_api_key",
+            "_authorization",
+            "_client_secret",
+            "_cookie",
+            "_password",
+            "_refresh_token",
+            "_secret",
+            "_token",
+        )
+    )
+
+
+def _redact_debug_text(value: str) -> str:
+    configured_key = os.environ.get("PONTE_LLM_API_KEY", "")
+    if configured_key:
+        value = value.replace(configured_key, "<redacted>")
+    value = _BEARER_TEXT.sub("Bearer <redacted>", value)
+    return _TOKEN_ASSIGNMENT_TEXT.sub(r"\1<redacted>", value)
+
+
+def _redact_debug_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        redacted: dict[str, object] = {}
+        for key, nested_value in value.items():
+            try:
+                key_text = key if isinstance(key, str) else str(key)
+            except Exception:
+                key_text = "<unserializable>"
+            if _is_debug_credential_key(key_text):
+                redacted[key_text] = "<redacted>"
+            else:
+                redacted[key_text] = _redact_debug_value(nested_value)
+        return redacted
+    if isinstance(value, (list, tuple)):
+        return [_redact_debug_value(item) for item in value]
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return _redact_debug_text(value)
+    return "<unserializable>"
+
+
+def log_debug_event(component: str, event: str, **fields: object) -> None:
+    """Emit structured DEBUG content without allowing logging to affect callers."""
+    try:
+        if component not in _SUPPORTED_COMPONENTS or not isinstance(event, str):
+            return
+
+        event_text = _safe_scalar(event)
+        if event_text is _MISSING:
+            return
+
+        _ensure_logger(_level_from_environment())
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
+
+        debug_fields: list[str] = []
+        for name, value in fields.items():
+            if name not in _DEBUG_FIELDS:
+                continue
+            redacted_value = _redact_debug_value(value)
+            serialized_value = json.dumps(
+                redacted_value,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            debug_fields.append(f"{name}={serialized_value}")
+
+        message = f"[{component}] {event_text}"
+        if debug_fields:
+            message += " " + " ".join(debug_fields)
+
+        _LOGGER.debug(message, extra={"component": component})
+    except Exception:
+        return
 
 
 def log_event(component: str, event: str, **fields: object) -> None:

@@ -5,10 +5,79 @@ import os
 import unittest
 from unittest.mock import patch
 
-from ponte_logging import endpoint_label, log_event
+from ponte_logging import endpoint_label, log_debug_event, log_event
 
 
 class PonteLoggingTests(unittest.TestCase):
+    def test_debug_event_is_hidden_at_info(self):
+        with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "INFO"}):
+            with self.assertLogs("ponte", level="INFO") as captured:
+                log_event("llm", "send", model="test-model")
+                log_debug_event("llm", "send", prompt="PATIENT_PROMPT")
+
+        self.assertNotIn("PATIENT_PROMPT", "\n".join(captured.output))
+
+    def test_debug_event_shows_content_and_masks_nested_credentials(self):
+        with patch.dict(
+            os.environ,
+            {
+                "PONTE_LOG_LEVEL": "DEBUG",
+                "PONTE_LLM_API_KEY": "CONFIGURED_API_KEY",
+            },
+        ):
+            with self.assertLogs("ponte", level="DEBUG") as captured:
+                log_debug_event(
+                    "mcp",
+                    "receive",
+                    result={
+                        "patient_id": "PAT-001",
+                        "authorization": "Bearer NESTED_TOKEN",
+                        "nested": {
+                            "api_key": "INLINE_KEY",
+                            "records": [{"secret": "INLINE_SECRET"}],
+                        },
+                    },
+                    prompt=(
+                        "medical data CONFIGURED_API_KEY; "
+                        "Authorization: Bearer INLINE_BEARER; token=INLINE_TOKEN"
+                    ),
+                )
+
+        output = "\n".join(captured.output)
+        self.assertIn("PAT-001", output)
+        self.assertIn("<redacted>", output)
+        for secret in (
+            "CONFIGURED_API_KEY",
+            "NESTED_TOKEN",
+            "INLINE_KEY",
+            "INLINE_SECRET",
+            "INLINE_BEARER",
+            "INLINE_TOKEN",
+        ):
+            self.assertNotIn(secret, output)
+
+    def test_debug_event_drops_unknown_fields_and_logging_failures(self):
+        with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "DEBUG"}):
+            with self.assertLogs("ponte", level="DEBUG") as captured:
+                log_debug_event(
+                    "mcp",
+                    "send_debug",
+                    request={"patient_id": "PATIENT_REQUEST"},
+                    unknown="PATIENT_UNKNOWN_FIELD",
+                )
+
+        output = "\n".join(captured.output)
+        self.assertIn("PATIENT_REQUEST", output)
+        self.assertNotIn("PATIENT_UNKNOWN_FIELD", output)
+        self.assertNotIn("unknown", output)
+
+        with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "DEBUG"}):
+            with patch(
+                "ponte_logging._LOGGER.debug",
+                side_effect=RuntimeError("SECRET_LOG_FAILURE"),
+            ):
+                log_debug_event("llm", "send_debug", prompt="PATIENT_PROMPT")
+
     def test_event_has_component_and_only_safe_fields(self):
         with self.assertLogs("ponte", level="INFO") as captured:
             log_event(
