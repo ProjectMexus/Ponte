@@ -27,7 +27,7 @@ MCP/                     固定 tool registry + REST adapter
 mock_backends/           One Account / Medical / Social Welfare
 ```
 
-各層的責任是分開的：Frontend Task Workspace 管理目前頁面的任務卡歷史；LLM 或 intent recognizer 不直接寫入 backend；流程、確認及 tool permission 由 middleware／workflow layer 控制；MCP 只負責受控的工具接入；mock backend 只模擬下游服務。
+各層的責任是分開的：Frontend Task Workspace 管理目前頁面的任務卡歷史；Intent LLM／intent recognizer 只把使用者輸入轉成結構化 intent；Task Recovery LLM 只理解 sanitised 的 backend/tool 結果並產生 `RecoveryPlan`，兩者由不同 interface、prompt、context 和設定管理；流程、確認及 tool permission 由 middleware／workflow layer 控制；MCP 只負責受控的工具接入；mock backend 只模擬下游服務。
 
 ## 快速開始
 
@@ -39,7 +39,7 @@ mock_backends/           One Account / Medical / Social Welfare
 cp .env.example .env
 ```
 
-要使用 Gemini 做 LLM intent recognition，請在本地 `.env` 填入 Google AI Studio API key。`.env.example` 已示範 Ponte 所需的 OpenAI-compatible endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` 及低成本模型 `gemini-2.5-flash-lite`；API key 只放在本地設定，不要提交到 repository。若 `PONTE_LLM_API_URL` 留空，middleware 會只使用 keyword intent recognition。
+要使用 Gemini 做 Intent LLM recognition，請在本地 `.env` 填入 Google AI Studio API key。`.env.example` 已示範 Ponte 所需的 OpenAI-compatible endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` 及低成本模型 `gemini-2.5-flash-lite`；API key 只放在本地設定，不要提交到 repository。若 `PONTE_LLM_API_URL` 留空，middleware 會只使用 keyword intent recognition。Task Recovery LLM 是另一個獨立邊界；目前使用 middleware 內的 deterministic recovery fallback，不共用 Intent LLM 的輸入或設定。
 
 在 repository 根目錄執行完整 stack：
 
@@ -61,7 +61,7 @@ Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio serv
 我想預約醫療服務
 ```
 
-前端會建立一張進行中的預約任務卡，先取得可預約服務；選擇服務及日期範圍後，middleware 會返回可預約時段。選擇時段並明確確認後，mock backend 才會建立預約記錄，完成的任務卡會收合但仍可重新展開。完成後再次輸入「我想查詢自己的醫療預約」，即可建立新的查詢任務並從 mock backend 讀回剛建立的預約。按 `Ctrl-C` 會關閉整個 stack。
+前端會建立一張進行中的預約任務卡，先取得可預約服務；選擇服務及日期範圍後，middleware 會返回可預約時段。如果 backend 暫時失敗、缺少資料或目前沒有名額，任務卡會保留並說明原因，提供重試或替代方案；選擇方案會繼續同一 task。選擇時段並明確確認後，mock backend 才會建立預約記錄，完成的任務卡會收合但仍可重新展開。完成後再次輸入「我想查詢自己的醫療預約」，即可建立新的查詢任務並從 mock backend 讀回剛建立的預約。按 `Ctrl-C` 會關閉整個 stack。
 
 也可以在前端輸入以下兩個只讀需求，直接測試 middleware → MCP → mock backend 的完整路徑：
 

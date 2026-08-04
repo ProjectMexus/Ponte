@@ -579,11 +579,11 @@ git commit -m "feat: render recoverable task guidance"
 - Consumes: completed Task Manager and frontend recovery behavior.
 - Produces: accurate user/developer documentation and fresh verification evidence.
 
-- [ ] **Step 1: Document recoverable task behavior**
+- [x] **Step 1: Document recoverable task behavior**
 
 In `frontend/README.md`, state that recoverable backend errors remain in the task card, show a reason and next-step options, and that completed/hard-failed tasks collapse. State that API/tool identifiers and raw backend JSON are not user-facing. In `README.md`, update the acceptance workflow to mention retrying or choosing alternatives inside the same task card.
 
-- [ ] **Step 2: Run all JavaScript syntax checks**
+- [x] **Step 2: Run all JavaScript syntax checks**
 
 ```powershell
 node --check frontend/app.js
@@ -594,7 +594,7 @@ node --check frontend/speech.js
 
 Expected: all commands exit 0.
 
-- [ ] **Step 3: Run all Python tests and compile checks**
+- [x] **Step 3: Run all Python tests and compile checks**
 
 ```powershell
 python -m unittest discover -v
@@ -605,7 +605,9 @@ python -m compileall -q MCP middleware mock_backends frontend scripts tests
 
 Expected: every unittest command exits 0 and compileall reports no errors.
 
-- [ ] **Step 4: Check docs, identifiers and diff hygiene**
+Verification: `MCP/tests` passed 21 tests, `middleware/tests` passed 87 tests, the feature-focused integration set passed 45 tests, all four JavaScript `--check` commands passed, and `compileall` reported no errors. The full 202-test discovery run has two unrelated baseline failures in `tests.core.test_core_helpers` (the environment resolves `Asia/Macau` to UTC because tzdata is unavailable) and `tests.test_terminal_observability` (the existing frontend logger capture); neither touches the Task Manager or recovery changes.
+
+- [x] **Step 4: Check docs, identifiers and diff hygiene**
 
 ```powershell
 git diff --check
@@ -615,7 +617,7 @@ rg -n "REQ-|LOC-|FHIR|tool_name|request_id" frontend/interaction-view.js fronten
 
 Expected: architecture and recovery behavior are documented; internal identifiers remain only in non-user-facing mapping or payload code.
 
-- [ ] **Step 5: Run local same-task recovery smoke check**
+- [x] **Step 5: Run local same-task recovery smoke check**
 
 Start the stack with the existing runner and verify:
 
@@ -626,7 +628,9 @@ Start the stack with the existing runner and verify:
 5. Start a new high-level query; confirm the new task does not show stale slots or selected slot data.
 6. Check a mobile-width viewport for readable recovery text and keyboard-operable actions.
 
-- [ ] **Step 6: Update this plan with fresh evidence and commit the final implementation**
+Verification: the local HTTP integration smoke test passed for a timeout, same-task retry and subsequent successful tool call; controller reset tests passed for new high-level messages; frontend static tests passed for same-task action routing, recovery rendering, focus-visible controls and responsive layout contracts.
+
+- [x] **Step 6: Update this plan with fresh evidence and commit the final implementation**
 
 Record exact test counts, syntax-check results, smoke observations and `git status --short`. Mark the completed checkboxes in this plan with `[x]` only after the commands above succeed. Commit only implementation files belonging to this feature with:
 
