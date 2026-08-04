@@ -19,6 +19,9 @@ from .diagnostics import (
 from .execution import ExecutionPipeline
 from .intent import IntentRecognizer, KeywordIntentRecognizer, build_intent_recognizer
 from .session import SessionState, SessionStore, build_response
+from .task_manager.interpreter import DeterministicTaskRecoveryInterpreter, TaskRecoveryInterpreter
+from .task_manager.manager import TaskManager
+from .task_manager.recovery import build_recovery_plan
 
 
 _ACTION_NAMES = frozenset({
@@ -46,6 +49,7 @@ class InteractionController:
         *,
         mock_user_id: str = "USR-DEMO-001",
         registry: ToolRegistry | None = None,
+        recovery_interpreter: TaskRecoveryInterpreter | None = None,
     ) -> None:
         self.pipeline = pipeline
         self.sessions = sessions
@@ -54,12 +58,13 @@ class InteractionController:
         self.mock_user_id = _required_string(mock_user_id, "mock_user_id")
         self.registry = registry or build_registry()
         self.intent_recognizer = intent_recognizer or build_intent_recognizer()
+        self.recovery_interpreter = recovery_interpreter or DeterministicTaskRecoveryInterpreter()
 
     def handle_message(self, request: InteractionRequest) -> dict[str, Any]:
         if not isinstance(request, InteractionRequest):
             raise ValueError("request must be an InteractionRequest")
         state = self.sessions.get_or_create(request.session_id)
-        state.reset_for_new_task()
+        self._task_manager(state).start_new_task()
 
         diagnostic = DiagnosticCommand.parse(request.message)
         if diagnostic is not None:
@@ -77,8 +82,7 @@ class InteractionController:
         if intent.is_medical_booking:
             return self._handle_medical_booking(state)
         if not intent.is_medical:
-            state.task_state = "idle"
-            state.current_step = "welcome"
+            self._task_manager(state).transition("idle", "welcome")
             return build_response(
                 state,
                 "我可以協助查詢醫療預約、可預約服務和時段。請告訴我你想辦理的事項。",
@@ -86,8 +90,8 @@ class InteractionController:
             )
 
     def _handle_medical_query(self, state: SessionState) -> dict[str, Any]:
-        state.task_state = "querying"
-        state.current_step = "load_appointments"
+        manager = self._task_manager(state)
+        manager.transition("querying", "load_appointments")
         appointments_result = self._run_tool(
             state,
             "medical.get_my_appointments",
@@ -98,14 +102,13 @@ class InteractionController:
         if appointments is None:
             return build_response(state, "暫時無法查詢你的醫療預約，請稍後再試。", [])
         state.data["appointments"] = appointments
-        state.task_state = "completed"
-        state.current_step = "load_appointments"
+        manager.complete("load_appointments")
         state.confirmation_record = None
         return build_response(state, "我已查到你目前的醫療預約。", [])
 
     def _handle_medical_booking(self, state: SessionState) -> dict[str, Any]:
-        state.task_state = "querying"
-        state.current_step = "load_appointments"
+        manager = self._task_manager(state)
+        manager.transition("querying", "load_appointments")
         appointments_result = self._run_tool(
             state,
             "medical.get_my_appointments",
@@ -117,7 +120,7 @@ class InteractionController:
             return build_response(state, "暫時無法查詢你的醫療預約，請稍後再試。", [])
         state.data["appointments"] = appointments
 
-        state.current_step = "load_services"
+        manager.transition("querying", "load_services")
         services_result = self._run_tool(
             state,
             "medical.list_appointment_services",
@@ -128,8 +131,7 @@ class InteractionController:
         if services is None:
             return build_response(state, "暫時無法載入可預約服務，請稍後再試。", [])
         state.data["services"] = services
-        state.task_state = "selecting_service"
-        state.current_step = "select_service"
+        manager.transition("selecting_service", "select_service")
         state.confirmation_record = None
         return build_response(
             state,
@@ -138,8 +140,8 @@ class InteractionController:
         )
 
     def _handle_cash_sharing(self, state: SessionState) -> dict[str, Any]:
-        state.task_state = "querying"
-        state.current_step = "load_cash_sharing_plan"
+        manager = self._task_manager(state)
+        manager.transition("querying", "load_cash_sharing_plan")
         result = self._run_tool(
             state,
             "one_account.get_cash_sharing_plan",
@@ -150,13 +152,12 @@ class InteractionController:
         if data is None:
             return build_response(state, "暫時無法查詢現金分享計劃，請稍後再試。", [])
         state.data["cash_sharing_plan"] = data
-        state.task_state = "completed"
-        state.current_step = "cash_sharing_plan"
+        manager.complete("cash_sharing_plan")
         return build_response(state, "我已查到你的現金分享計劃資料。", [])
 
     def _handle_elderly_activity(self, state: SessionState) -> dict[str, Any]:
-        state.task_state = "querying"
-        state.current_step = "search_elderly_activities"
+        manager = self._task_manager(state)
+        manager.transition("querying", "search_elderly_activities")
         result = self._run_tool(
             state,
             "one_account.search_elderly_activities",
@@ -167,8 +168,7 @@ class InteractionController:
         if data is None:
             return build_response(state, "暫時無法查詢長者文娛活動，請稍後再試。", [])
         state.data["activities"] = data
-        state.task_state = "completed"
-        state.current_step = "elderly_activities"
+        manager.complete("elderly_activities")
         return build_response(state, "我已查到目前可參加的長者文娛活動。", [])
 
     def handle_action(self, request: InteractionActionRequest) -> dict[str, Any]:
@@ -178,7 +178,7 @@ class InteractionController:
             raise ValueError(f"Unknown interaction action: {request.action}")
 
         state = self.sessions.get_or_create(request.session_id)
-        state.last_error = None
+        self._task_manager(state).start_action()
         action = request.action
         if action == "confirm_tool":
             return self._confirm_diagnostic(state)
@@ -191,16 +191,17 @@ class InteractionController:
         if action == "cancel":
             if state.data.get("pending_diagnostic") is not None:
                 return self._cancel_diagnostic(state)
-            state.task_state = "cancelled"
-            state.current_step = "cancel"
+            self._task_manager(state).cancel("cancel")
             state.confirmation_record = None
             return build_response(state, "已取消這次預約協助。", [])
         if action == "retry":
             return self._retry(state)
 
-        state.task_state = "human_handoff"
-        state.current_step = "human_help"
+        self._task_manager(state).human_handoff()
         return build_response(state, "我會為你轉接人工協助。", [])
+
+    def _task_manager(self, state: SessionState) -> TaskManager:
+        return TaskManager(state, self.recovery_interpreter)
 
     def _handle_diagnostic_message(
         self,
@@ -216,8 +217,7 @@ class InteractionController:
                 "input": deepcopy(command.input_data),
                 "diagnostic": deepcopy(descriptor),
             }
-            state.task_state = "awaiting_confirmation"
-            state.current_step = "confirm_tool"
+            self._task_manager(state).transition("awaiting_confirmation", "confirm_tool")
             return self._diagnostic_response(
                 state,
                 "這個 MCP tool 會修改測試資料，請確認後才會執行。",
@@ -236,8 +236,7 @@ class InteractionController:
         )
         state.data["backend_response"] = _diagnostic_backend_response(result)
         if result.ok:
-            state.task_state = "completed"
-            state.current_step = step_id
+            self._task_manager(state).complete(step_id)
             message = "已完成 MCP tool 測試，以下是 backend 回應。"
         else:
             message = "MCP tool 測試未成功，請檢查以下錯誤資料。"
@@ -256,7 +255,7 @@ class InteractionController:
         descriptor = describe_diagnostic_command(self.registry, command)
         state.data["diagnostic"] = deepcopy(descriptor)
         step_id = _diagnostic_step_id(command.tool_name)
-        state.task_state = "querying"
+        self._task_manager(state).transition("querying", step_id)
         result = self._run_tool(
             state,
             command.tool_name,
@@ -267,8 +266,7 @@ class InteractionController:
         )
         state.data["backend_response"] = _diagnostic_backend_response(result)
         if result.ok:
-            state.task_state = "completed"
-            state.current_step = step_id
+            self._task_manager(state).complete(step_id)
             message = "已確認並完成 MCP tool 測試，以下是 backend 回應。"
         else:
             message = "已確認執行，但 MCP tool 未成功。"
@@ -276,8 +274,7 @@ class InteractionController:
 
     def _cancel_diagnostic(self, state: SessionState) -> dict[str, Any]:
         state.data.pop("pending_diagnostic", None)
-        state.task_state = "cancelled"
-        state.current_step = "cancel_diagnostic"
+        self._task_manager(state).cancel("cancel_diagnostic")
         return self._diagnostic_response(state, "已取消這次 MCP tool 測試。", [])
 
     @staticmethod
@@ -304,14 +301,30 @@ class InteractionController:
                 input_data[key] = _payload_string(payload, key)
 
         state.data.update({"service_id": service_id, "date_from": date_from, "date_to": date_to})
-        state.task_state = "querying"
+        manager = self._task_manager(state)
+        manager.transition("querying", "search_slots")
         result = self._run_tool(state, "medical.search_appointment_slots", "search_slots", input_data)
         slots = self._result_data(state, result, "search_slots")
         if slots is None:
             return build_response(state, "暫時無法查詢可預約時段，請稍後再試。", [])
         state.data["slots"] = slots
-        state.task_state = "selecting_slot"
-        state.current_step = "select_slot"
+        if not slots:
+            plan = build_recovery_plan(
+                error=None,
+                step_id="search_slots",
+                workflow=str(state.data.get("intent", "medical_booking")),
+                data={
+                    "service_id": service_id,
+                    "date_from": date_from,
+                    "date_to": date_to,
+                },
+                result_data=slots,
+                retryable=False,
+            )
+            if plan is not None:
+                manager.request_user_input(plan)
+            return build_response(state, "目前選擇的服務和日期範圍沒有可預約名額。", [])
+        manager.transition("selecting_slot", "select_slot")
         return build_response(state, "請選擇一個可預約時段。", [{"action": "select_slot", "label": "選擇時段"}])
 
     def _select_slot(self, state: SessionState, payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -327,8 +340,7 @@ class InteractionController:
                     break
         state.data["slot_id"] = slot_id
         state.data["selected_slot"] = selected_slot
-        state.task_state = "awaiting_confirmation"
-        state.current_step = "confirm_appointment"
+        self._task_manager(state).transition("awaiting_confirmation", "confirm_appointment")
         return build_response(
             state,
             "請確認這個時段後再提交預約。",
@@ -359,7 +371,8 @@ class InteractionController:
             "decision": "confirmed",
             "confirmed_at": datetime.now(timezone.utc).isoformat(),
         }
-        state.task_state = "submitting"
+        manager = self._task_manager(state)
+        manager.transition("submitting", "create_appointment")
         create_result = self._run_tool(
             state,
             "medical.create_appointment",
@@ -381,7 +394,7 @@ class InteractionController:
             return build_response(state, "預約服務回覆格式不完整，請稍後再試。", [])
 
         state.data["task_id"] = task_id
-        state.task_state = "submitted"
+        manager.transition("submitted", "get_task_status")
         status_result = self._run_tool(
             state,
             "medical.get_task_status",
@@ -401,14 +414,15 @@ class InteractionController:
             )
             return build_response(state, "預約任務回覆格式不完整，請稍後再試。", [])
         state.data["task_status"] = status
-        state.task_state = _task_state(status)
-        state.current_step = "get_task_status"
+        manager.transition(_task_state(status), "get_task_status")
         return build_response(state, "預約已提交，我已取得最新任務狀態。", [])
 
     def _retry(self, state: SessionState) -> dict[str, Any]:
         call = state.last_tool_call
         if call is None:
             return build_response(state, "目前沒有可重試的查詢。", [])
+        manager = self._task_manager(state)
+        manager.transition("querying", call.step_id)
         result = self._run_tool(
             state,
             call.name,
@@ -419,8 +433,23 @@ class InteractionController:
             data = self._result_data(state, result, call.step_id)
             if data is not None:
                 state.data["last_retry_data"] = data
-                state.task_state = "querying"
-                state.current_step = call.step_id
+                if call.name == "medical.search_appointment_slots":
+                    state.data["slots"] = data
+                    if data:
+                        manager.transition("selecting_slot", "select_slot")
+                    else:
+                        plan = build_recovery_plan(
+                            error=None,
+                            step_id=call.step_id,
+                            workflow=str(state.data.get("intent", "medical_booking")),
+                            data=state.data,
+                            result_data=data,
+                            retryable=False,
+                        )
+                        if plan is not None:
+                            manager.request_user_input(plan)
+                else:
+                    manager.transition("querying", call.step_id)
         return build_response(state, "已重試上一個查詢。" if result.ok else "重試查詢仍未成功，請稍後再試。", [])
 
     def _run_tool(
@@ -442,29 +471,14 @@ class InteractionController:
             step_id=step_id,
         )
         result = self.pipeline.dispatch(call)
-        event: dict[str, Any] = {
-            "tool_name": result.tool_name,
-            "step_id": result.step_id,
-            "ok": result.ok,
-            "request_id": result.request_id,
-            "arguments": {"input": deepcopy(dict(input_data))},
-        }
-        if result.data is not None:
-            event["data"] = deepcopy(result.data)
-        if result.error is not None:
-            event["error"] = deepcopy(result.error)
-        state.tool_events.append(event)
-        state.steps.append({"step_id": step_id, "tool_name": name, "ok": result.ok})
-        if safe_for_retry:
-            state.last_tool_call = call
-        if not result.ok:
-            self._set_error(
-                state,
-                step_id,
-                (result.error or {}).get("code", "TOOL_EXECUTION_FAILED"),
-                (result.error or {}).get("message", "Tool execution failed."),
-                details=result.error,
-            )
+        self._task_manager(state).record_tool_result(
+            result,
+            step_id,
+            input_data,
+            safe_for_retry=safe_for_retry,
+            workflow=str(state.data.get("intent", "general")),
+            call=call,
+        )
         return result
 
 
@@ -521,8 +535,8 @@ class InteractionController:
             return task["id"]
         return None
 
-    @staticmethod
     def _set_error(
+        self,
         state: SessionState,
         step_id: str,
         code: str,
@@ -530,14 +544,16 @@ class InteractionController:
         *,
         details: Any = None,
     ) -> None:
-        state.task_state = "error"
-        state.current_step = step_id
-        state.last_error = {
-            "code": code,
-            "message": message,
-            "details": deepcopy(details),
-            "retryable": code in {"BACKEND_UNAVAILABLE", "BACKEND_TIMEOUT"},
-        }
+        self._task_manager(state).fail(
+            step_id,
+            {
+                "code": code,
+                "message": message,
+                "details": deepcopy(details),
+                "retryable": code in {"BACKEND_UNAVAILABLE", "BACKEND_TIMEOUT"},
+            },
+            message,
+        )
 
 
 def _required_string(value: Any, field_name: str) -> str:

@@ -81,6 +81,22 @@ class TimeoutThenSuccessPipeline(RecordingPipeline):
         return super().dispatch(call)
 
 
+class EmptySlotsPipeline(RecordingPipeline):
+    def dispatch(self, call):
+        if call.name == "medical.search_appointment_slots":
+            self.calls.append(call)
+            return ToolExecutionResult(call.name, call.step_id, True, "REQ-EMPTY", {"data": []}, None)
+        return super().dispatch(call)
+
+
+class InvalidAppointmentsPipeline(RecordingPipeline):
+    def dispatch(self, call):
+        if call.name == "medical.get_my_appointments":
+            self.calls.append(call)
+            return ToolExecutionResult(call.name, call.step_id, True, "REQ-INVALID", {"unexpected": []}, None)
+        return super().dispatch(call)
+
+
 class AlwaysGeneralRecognizer(IntentRecognizer):
     def recognize(self, message):
         return IntentDecision("general", "llm", 0.99)
@@ -285,6 +301,39 @@ class ControllerTests(unittest.TestCase):
         second = controller.handle_action(InteractionActionRequest("S-RECOVER", "retry", {}))
         self.assertEqual(second["task_state"], "selecting_slot")
         self.assertEqual(second["data"]["service_id"], "SERVICE-US-001")
+
+    def test_empty_slots_explain_availability_and_keep_task_open(self):
+        pipeline = EmptySlotsPipeline()
+        controller = InteractionController(
+            pipeline,
+            SessionStore(),
+            "PAT-DEMO-001",
+            "Bearer mock-user-token",
+            intent_recognizer=KeywordIntentRecognizer(),
+        )
+        controller.handle_message(InteractionRequest("S-EMPTY", "我想預約醫療服務"))
+        response = controller.handle_action(InteractionActionRequest("S-EMPTY", "search_slots", {
+            "service_id": "SERVICE-US-001",
+            "date_from": "2026-08-10",
+            "date_to": "2026-08-14",
+        }))
+        self.assertEqual(response["task_state"], "awaiting_user_input")
+        self.assertEqual(response["recovery"]["reason_code"], "NO_AVAILABLE_SLOTS")
+        self.assertIn("沒有可預約名額", response["assistant_message"])
+
+    def test_invalid_backend_response_remains_hard_failed(self):
+        pipeline = InvalidAppointmentsPipeline()
+        controller = InteractionController(
+            pipeline,
+            SessionStore(),
+            "PAT-DEMO-001",
+            "Bearer mock-user-token",
+            intent_recognizer=KeywordIntentRecognizer(),
+        )
+        response = controller.handle_message(InteractionRequest("S-INVALID", "我想查詢自己的醫療預約"))
+        self.assertEqual(response["task_state"], "failed")
+        self.assertNotIn("recovery", response)
+        self.assertEqual(response["error"]["code"], "BACKEND_INVALID_RESPONSE")
 
 
 if __name__ == "__main__":

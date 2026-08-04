@@ -22,6 +22,7 @@ from .execution import ExecutionPipeline, McpExecutionStage
 from .intent import IntentRecognizer
 from .mcp_client import McpStdioClient
 from .session import SessionStore
+from .task_manager.interpreter import TaskRecoveryInterpreter
 
 
 class ClientRequestError(Exception):
@@ -47,6 +48,7 @@ class MiddlewareApplication:
         mcp_client: McpStdioClient | None = None,
         mock_user_id: str = "USR-DEMO-001",
         intent_recognizer: IntentRecognizer | None = None,
+        recovery_interpreter: TaskRecoveryInterpreter | None = None,
     ) -> None:
         self.backend_url = backend_url.rstrip("/")
         self.patient_id = patient_id
@@ -68,6 +70,7 @@ class MiddlewareApplication:
             intent_recognizer=intent_recognizer,
             mock_user_id=mock_user_id,
             registry=self.registry,
+            recovery_interpreter=recovery_interpreter,
         )
 
     def close(self) -> None:
@@ -97,6 +100,7 @@ def create_application(
     mcp_client: McpStdioClient | None = None,
     mock_user_id: str = "USR-DEMO-001",
     intent_recognizer: IntentRecognizer | None = None,
+    recovery_interpreter: TaskRecoveryInterpreter | None = None,
 ) -> MiddlewareApplication:
     """Create one isolated middleware application with in-memory sessions."""
 
@@ -110,6 +114,7 @@ def create_application(
         mcp_client=mcp_client,
         mock_user_id=mock_user_id,
         intent_recognizer=intent_recognizer,
+        recovery_interpreter=recovery_interpreter,
     )
 
 

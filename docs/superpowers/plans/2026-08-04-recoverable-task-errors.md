@@ -419,15 +419,15 @@ git commit -m "feat: integrate task manager with session state"
 - Consumes: `TaskManager` lifecycle methods, `TaskRecoveryInterpreter` and recovery policy.
 - Produces: controller responses that keep recoverable backend errors open and allow same-session retry/alternative actions.
 
-- [ ] **Step 1: Start/reset tasks through Task Manager**
+- [x] **Step 1: Start/reset tasks through Task Manager**
 
 Add an optional `recovery_interpreter` constructor parameter to `InteractionController`, `MiddlewareApplication` and `create_application()`, defaulting to `DeterministicTaskRecoveryInterpreter`. At the beginning of `handle_message()`, instantiate `TaskManager(state, self.recovery_interpreter)` and call `start_new_task()`. At the beginning of `handle_action()`, instantiate the same manager and call `start_action()` instead of clearing only `last_error`. Do not call `start_new_task()` from `handle_action()`; do not pass this interpreter through `intent_recognizer`.
 
-- [ ] **Step 2: Replace direct lifecycle assignments in workflow handlers**
+- [x] **Step 2: Replace direct lifecycle assignments in workflow handlers**
 
 Use `manager.transition(task_state, current_step)` for the existing states while leaving intent recognition, tool ordering, data keys and action names unchanged. Keep the existing confirmation rule: `medical.create_appointment` is called only by `confirm` after `awaiting_confirmation`.
 
-- [ ] **Step 3: Delegate `_run_tool()` bookkeeping**
+- [x] **Step 3: Delegate `_run_tool()` bookkeeping**
 
 Remove the duplicated event/step/last-error bookkeeping from `_run_tool()` and call:
 
@@ -443,15 +443,15 @@ manager.record_tool_result(
 
 Keep `_run_tool()` responsible for constructing `ToolCall` and dispatching the pipeline. Preserve the existing event shape, idempotency behavior and retry safety.
 
-- [ ] **Step 4: Handle empty appointment slots as recoverable**
+- [x] **Step 4: Handle empty appointment slots as recoverable**
 
 In `_search_slots()`, after `_result_data()` succeeds, branch on an empty list before setting the normal `selecting_slot` state. Save `state.data["slots"] = []`, apply the availability recovery plan through `TaskManager`, and return an assistant response that explains there are no available slots. If alternatives are supplied by the backend, save the safe candidate list and expose only controlled `select_slot`/`search_slots` actions.
 
-- [ ] **Step 5: Preserve hard schema failures**
+- [x] **Step 5: Preserve hard schema failures**
 
 Replace `_set_error()` calls for missing `data`, invalid data types, missing task IDs and missing task statuses with `manager.fail()` using `BACKEND_INVALID_RESPONSE`. Keep the current Chinese assistant messages and ensure those responses have `task_state == "failed"` and no recovery actions.
 
-- [ ] **Step 6: Add controller and integration assertions**
+- [x] **Step 6: Add controller and integration assertions**
 
 Add tests for:
 
@@ -479,7 +479,7 @@ def test_retry_after_recoverable_error_reuses_services_and_date_range(self):
 
 Extend the middleware integration flow to submit a same-session recovery action and assert the subsequent tool event list contains the original failed step and the new successful call, while a new high-level message still contains only its own query tool event.
 
-- [ ] **Step 7: Run middleware and integration tests**
+- [x] **Step 7: Run middleware and integration tests**
 
 Run:
 
@@ -489,7 +489,7 @@ python -m unittest middleware.tests.test_controller middleware.tests.test_server
 
 Expected: all existing workflow, diagnostic, reset and new recovery tests pass.
 
-- [ ] **Step 8: Commit controller integration**
+- [x] **Step 8: Commit controller integration**
 
 ```powershell
 git add middleware/controller.py middleware/tests/test_controller.py tests/test_middleware_integration.py
