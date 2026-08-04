@@ -318,6 +318,7 @@ def log_debug_event(component: str, event: str, **fields: object) -> None:
                 sort_keys=True,
                 indent=2,
             )
+            serialized_value = serialized_value.replace("\n", "\n  ")
             debug_fields.append(f"  {name}={serialized_value}")
 
         message = f"[{component}] {event_text}"

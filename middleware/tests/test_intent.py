@@ -3,6 +3,8 @@ import io
 import json
 import os
 import unittest
+from urllib.error import HTTPError
+from urllib.request import Request
 from unittest.mock import patch
 
 from middleware.intent import (
@@ -147,6 +149,184 @@ class IntentTests(unittest.TestCase):
         self.assertIn("confidence=0.91", output)
         self.assertRegex(output, r"latency_ms=\d+")
         self.assertNotIn("CONFIGURED_API_KEY", output)
+
+    def test_llm_debug_logs_invalid_schema_response(self):
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions",
+            transport=lambda request, timeout: {
+                "choices": [],
+                "marker": "INVALID_SCHEMA_RESPONSE",
+            },
+        )
+        with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "DEBUG"}):
+            with self.assertLogs("ponte", level="DEBUG") as captured:
+                with self.assertRaises(IntentRecognitionError):
+                    recognizer.recognize("我想預約醫療服務")
+
+        output = "\n".join(captured.output)
+        self.assertIn("INVALID_SCHEMA_RESPONSE", output)
+        self.assertIn('outcome="parse_error"', output)
+        self.assertEqual(output.count("receive_debug"), 1)
+
+    def test_llm_debug_logs_http_error_body(self):
+        class ErrorOpener:
+            def open(self, request, timeout):
+                raise HTTPError(
+                    request.full_url,
+                    429,
+                    "rate limited",
+                    {},
+                    io.BytesIO(b'{"error":"PROVIDER_RESPONSE"}'),
+                )
+
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions",
+        )
+        with patch("middleware.intent.build_opener", return_value=ErrorOpener()):
+            with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "DEBUG"}):
+                with self.assertLogs("ponte", level="DEBUG") as captured:
+                    with self.assertRaises(IntentRecognitionError) as raised:
+                        recognizer.recognize("我想預約醫療服務")
+
+        output = "\n".join(captured.output)
+        self.assertIn("PROVIDER_RESPONSE", output)
+        self.assertIn('"status": 429', output)
+        self.assertEqual(
+            raised.exception.response,
+            {"status": 429, "body": {"error": "PROVIDER_RESPONSE"}},
+        )
+        self.assertEqual(output.count("receive_debug"), 1)
+
+    def test_llm_debug_logs_response_unavailable_without_exception_message(self):
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions",
+            transport=lambda request, timeout: (_ for _ in ()).throw(
+                RuntimeError("NETWORK_EXCEPTION_SECRET")
+            ),
+        )
+        with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "DEBUG"}):
+            with self.assertLogs("ponte", level="DEBUG") as captured:
+                with self.assertRaises(IntentRecognitionError):
+                    recognizer.recognize("我想預約醫療服務")
+
+        output = "\n".join(captured.output)
+        self.assertIn("response_unavailable=true", output)
+        self.assertIn('error_type="RuntimeError"', output)
+        self.assertNotIn("NETWORK_EXCEPTION_SECRET", output)
+        self.assertEqual(output.count("receive_debug"), 1)
+
+    def test_llm_request_preserves_invalid_json_response_snapshot(self):
+        class Response:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b"INVALID_JSON_BODY"
+
+        class Opener:
+            def open(self, request, timeout):
+                return Response()
+
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions",
+        )
+        with patch("middleware.intent.build_opener", return_value=Opener()):
+            with self.assertRaises(IntentRecognitionError) as raised:
+                recognizer._request_json(
+                    Request("https://llm.example.test/v1/chat/completions"), 8.0
+                )
+
+        self.assertEqual(
+            raised.exception.response,
+            {"status": 200, "body": "INVALID_JSON_BODY"},
+        )
+
+    def test_llm_debug_logs_invalid_json_response_body(self):
+        class Response:
+            status = 502
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b"INVALID_JSON_BODY"
+
+        class Opener:
+            def open(self, request, timeout):
+                return Response()
+
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions",
+        )
+        with patch("middleware.intent.build_opener", return_value=Opener()):
+            with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "DEBUG"}):
+                with self.assertLogs("ponte", level="DEBUG") as captured:
+                    with self.assertRaises(IntentRecognitionError):
+                        recognizer.recognize("我想預約醫療服務")
+
+        output = "\n".join(captured.output)
+        self.assertIn("INVALID_JSON_BODY", output)
+        self.assertIn('"status": 502', output)
+        self.assertEqual(output.count("receive_debug"), 1)
+
+    def test_llm_request_preserves_non_object_json_response_snapshot(self):
+        class Response:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b'["NON_OBJECT_RESPONSE"]'
+
+        class Opener:
+            def open(self, request, timeout):
+                return Response()
+
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions",
+        )
+        with patch("middleware.intent.build_opener", return_value=Opener()):
+            with self.assertRaises(IntentRecognitionError) as raised:
+                recognizer._request_json(
+                    Request("https://llm.example.test/v1/chat/completions"), 8.0
+                )
+
+        self.assertEqual(
+            raised.exception.response,
+            {"status": 200, "body": ["NON_OBJECT_RESPONSE"]},
+        )
+
+    def test_llm_debug_parse_error_response_is_hidden_at_info(self):
+        prompt_marker = "查詢我的醫療預約 PATIENT-PARSE-INFO-001"
+        response_marker = "MEDICAL_PARSE_RESPONSE_001"
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions",
+            transport=lambda request, timeout: {
+                "choices": [],
+                "medical_data": response_marker,
+            },
+        )
+        with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "INFO"}):
+            with self.assertLogs("ponte", level="INFO") as captured:
+                with self.assertRaises(IntentRecognitionError):
+                    recognizer.recognize(prompt_marker)
+
+        output = "\n".join(captured.output)
+        self.assertIn("[llm] error", output)
+        self.assertNotIn(prompt_marker, output)
+        self.assertNotIn(response_marker, output)
 
     def test_llm_debug_content_is_hidden_at_info(self):
         prompt_marker = "查詢我的醫療預約 PATIENT-INFO-ONLY-001"

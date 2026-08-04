@@ -103,7 +103,8 @@ class PonteLoggingTests(unittest.TestCase):
         self.assertGreater(len(lines), 4)
         self.assertTrue(all(" DEBUG [llm] " in line for line in lines))
         self.assertIn("response={", stderr.getvalue())
-        self.assertIn('    "message": "invalid"', stderr.getvalue())
+        self.assertIn('    "error": {', stderr.getvalue())
+        self.assertIn('      "message": "invalid"', stderr.getvalue())
         self.assertIn('  outcome="error"', stderr.getvalue())
 
     def test_debug_event_allows_response_unavailable(self):

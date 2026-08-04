@@ -24,6 +24,7 @@ IntentName = Literal[
     "general",
 ]
 IntentSource = Literal["keyword", "llm"]
+_NO_RESPONSE = object()
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,10 @@ class IntentDecision:
 
 class IntentRecognitionError(RuntimeError):
     """Raised when an LLM response cannot be used as an intent decision."""
+
+    def __init__(self, message: str, *, response: object = _NO_RESPONSE) -> None:
+        super().__init__(message)
+        self.response = response
 
 
 class IntentRecognizer(ABC):
@@ -206,19 +211,36 @@ class LlmIntentRecognizer(IntentRecognizer):
             endpoint=endpoint_label(self.api_url),
             prompt=request_body["messages"],
         )
+        response: object = _NO_RESPONSE
+        receive_debug_logged = False
         try:
             response = self._transport(request, self.timeout)
-            decision = self._parse_response(response)
+            try:
+                decision = self._parse_response(response)
+            except Exception as parse_error:
+                log_debug_event(
+                    "llm",
+                    "receive_debug",
+                    request_id=request_id,
+                    response=response,
+                    outcome="parse_error",
+                    error_type=type(parse_error).__name__,
+                    latency_ms=round((time.monotonic() - started_at) * 1000),
+                )
+                receive_debug_logged = True
+                raise
             latency_ms = round((time.monotonic() - started_at) * 1000)
             log_debug_event(
                 "llm",
                 "receive_debug",
                 request_id=request_id,
                 response=response,
+                outcome="success",
                 intent=decision.intent,
                 confidence=decision.confidence,
                 latency_ms=latency_ms,
             )
+            receive_debug_logged = True
             log_event(
                 "llm",
                 "receive",
@@ -229,6 +251,39 @@ class LlmIntentRecognizer(IntentRecognizer):
             )
             return decision
         except IntentRecognitionError as error:
+            if not receive_debug_logged:
+                snapshot = getattr(error, "response", _NO_RESPONSE)
+                if snapshot is _NO_RESPONSE:
+                    if response is _NO_RESPONSE:
+                        log_debug_event(
+                            "llm",
+                            "receive_debug",
+                            request_id=request_id,
+                            response_unavailable=True,
+                            outcome="error",
+                            error_type=type(error).__name__,
+                            latency_ms=round((time.monotonic() - started_at) * 1000),
+                        )
+                    else:
+                        log_debug_event(
+                            "llm",
+                            "receive_debug",
+                            request_id=request_id,
+                            response=response,
+                            outcome="error",
+                            error_type=type(error).__name__,
+                            latency_ms=round((time.monotonic() - started_at) * 1000),
+                        )
+                else:
+                    log_debug_event(
+                        "llm",
+                        "receive_debug",
+                        request_id=request_id,
+                        response=snapshot,
+                        outcome="error",
+                        error_type=type(error).__name__,
+                        latency_ms=round((time.monotonic() - started_at) * 1000),
+                    )
             log_event(
                 "llm",
                 "error",
@@ -240,6 +295,27 @@ class LlmIntentRecognizer(IntentRecognizer):
             )
             raise
         except Exception as error:
+            if not receive_debug_logged:
+                if response is _NO_RESPONSE:
+                    log_debug_event(
+                        "llm",
+                        "receive_debug",
+                        request_id=request_id,
+                        response_unavailable=True,
+                        outcome="error",
+                        error_type=type(error).__name__,
+                        latency_ms=round((time.monotonic() - started_at) * 1000),
+                    )
+                else:
+                    log_debug_event(
+                        "llm",
+                        "receive_debug",
+                        request_id=request_id,
+                        response=response,
+                        outcome="error",
+                        error_type=type(error).__name__,
+                        latency_ms=round((time.monotonic() - started_at) * 1000),
+                    )
             log_event(
                 "llm",
                 "error",
@@ -251,16 +327,45 @@ class LlmIntentRecognizer(IntentRecognizer):
             )
             raise IntentRecognitionError("LLM intent request failed") from error
 
+    @staticmethod
+    def _decode_provider_body(raw: bytes) -> object:
+        text = raw.decode("utf-8", errors="replace")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return text
+
     def _request_json(self, request: Request, timeout: float) -> Mapping[str, Any]:
         opener = build_opener(ProxyHandler({}))
         try:
             with opener.open(request, timeout=timeout) as response:
-                value = json.loads(response.read().decode("utf-8"))
-        except (HTTPError, URLError, OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                status = response.status
+                raw_body = response.read()
+        except HTTPError as error:
+            try:
+                raw_body = error.read()
+                decoded_body = self._decode_provider_body(raw_body)
+            except Exception:
+                raise IntentRecognitionError(
+                    "LLM intent request failed",
+                    response={"status": int(error.code), "body_unavailable": True},
+                ) from error
+            raise IntentRecognitionError(
+                "LLM intent request failed",
+                response={"status": int(error.code), "body": decoded_body},
+            ) from error
+        except (URLError, OSError) as error:
             raise IntentRecognitionError("LLM intent request failed") from error
-        if not isinstance(value, Mapping):
-            raise IntentRecognitionError("LLM response must be a JSON object")
-        return value
+        except Exception as error:
+            raise IntentRecognitionError("LLM intent request failed") from error
+
+        decoded_body = self._decode_provider_body(raw_body)
+        if not isinstance(decoded_body, Mapping):
+            raise IntentRecognitionError(
+                "LLM response must be a JSON object",
+                response={"status": int(status), "body": decoded_body},
+            )
+        return decoded_body
 
     @classmethod
     def _parse_response(cls, response: Mapping[str, Any]) -> IntentDecision:
