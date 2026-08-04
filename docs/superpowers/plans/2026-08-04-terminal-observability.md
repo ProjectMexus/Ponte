@@ -50,7 +50,7 @@
 - Supported components are exactly `frontend`, `middleware`, `llm`, `mcp`, and `backend`。
 - Supported fields are exactly `request_id`, `model`, `endpoint`, `message_count`, `message_chars`, `intent`, `confidence`, `latency_ms`, `source`, `fallback_reason`, `method`, `path`, `status`, `bytes`, `operation`, `tool`, `input_keys`, `outcome`, `error_code`, and `error_type`。
 
-- [ ] **Step 1: Write the failing logger tests**
+- [x] **Step 1: Write the failing logger tests**
 
 ```python
 import os
@@ -98,13 +98,13 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run the focused tests and verify they fail**
+- [x] **Step 2: Run the focused tests and verify they fail**
 
 Run: `python3 -m unittest tests.test_ponte_logging -v`
 
 Expected: FAIL because `ponte_logging.py` and its exported interfaces do not exist yet.
 
-- [ ] **Step 3: Implement the minimal shared logger**
+- [x] **Step 3: Implement the minimal shared logger**
 
 Implement `ponte_logging.py` with these exact behaviors:
 
@@ -120,13 +120,13 @@ The emitted line must look like:
 2026-08-04 12:00:00,000 INFO [llm] send request_id=LLM-ABC model=gemini-2.5-flash-lite message_chars=12
 ```
 
-- [ ] **Step 4: Run the focused tests and verify they pass**
+- [x] **Step 4: Run the focused tests and verify they pass**
 
 Run: `python3 -m unittest tests.test_ponte_logging -v`
 
 Expected: all logger tests PASS, including the negative assertions for API key and prompt markers.
 
-- [ ] **Step 5: Commit the shared logger**
+- [x] **Step 5: Commit the shared logger**
 
 ```bash
 git add ponte_logging.py tests/test_ponte_logging.py
@@ -144,7 +144,7 @@ git commit -m "feat: add safe terminal logging helper"
 - Produces `llm send`, `llm receive`, `llm error`, and `middleware intent_decision` events with no raw message or response content.
 - Preserves `IntentDecision`, `IntentRecognitionError`, and all existing recognizer behavior.
 
-- [ ] **Step 1: Add failing LLM summary tests**
+- [x] **Step 1: Add failing LLM summary tests**
 
 Extend the existing transport-based tests with a secret marker in the user message and response transport, then assert:
 
@@ -166,13 +166,13 @@ self.assertNotIn("Authorization", output)
 
 Add a hybrid fallback assertion that captures `[middleware] intent_decision`, checks `source=keyword` and `fallback_reason=llm_error`, and verifies the original failure message is absent.
 
-- [ ] **Step 2: Run the intent tests and verify the new assertions fail**
+- [x] **Step 2: Run the intent tests and verify the new assertions fail**
 
 Run: `python3 -m unittest middleware.tests.test_intent -v`
 
 Expected: existing intent behavior passes, while the new log assertions fail because no intent events are emitted.
 
-- [ ] **Step 3: Add safe LLM events**
+- [x] **Step 3: Add safe LLM events**
 
 In `LlmIntentRecognizer.recognize`:
 
@@ -183,13 +183,13 @@ In `LlmIntentRecognizer.recognize`:
 
 In `HybridIntentRecognizer.recognize`, emit one middleware decision event for each result: `source=llm` on success; `source=keyword`, `fallback_reason=llm_error` on LLM failure; and `source=keyword`, `fallback_reason=llm_not_configured` when no LLM exists. Include only the normalized `intent` and `confidence`.
 
-- [ ] **Step 4: Run all intent tests**
+- [x] **Step 4: Run all intent tests**
 
 Run: `python3 -m unittest middleware.tests.test_intent -v`
 
 Expected: all existing parsing/fallback tests and new safe-summary tests PASS.
 
-- [ ] **Step 5: Commit intent observability**
+- [x] **Step 5: Commit intent observability**
 
 ```bash
 git add middleware/intent.py middleware/tests/test_intent.py
@@ -207,29 +207,29 @@ git commit -m "feat: log safe llm intent summaries"
 - Produces `[mcp]` events for initialize and `tools/call` using MCP request IDs, tool names, input key names, outcome/error category, and latency.
 - Leaves `MCP/server.py` unchanged and keeps `stderr=subprocess.DEVNULL`; no JSON-RPC body is written to terminal.
 
-- [ ] **Step 1: Add failing MCP log tests**
+- [x] **Step 1: Add failing MCP log tests**
 
 Wrap the existing successful and error `call_tool` tests with `assertLogs("ponte", level="INFO")`. Assert the output contains `operation=tools/call`, `tool=medical.list_departments`, `input_keys=context,input`, and `outcome=success` (or `outcome=error` plus `error_code=SLOT_NOT_AVAILABLE`), while excluding a test argument value such as `PATIENT_SECRET` and the serialized JSON-RPC key `"jsonrpc"`.
 
-- [ ] **Step 2: Run the focused MCP tests and verify the new assertions fail**
+- [x] **Step 2: Run the focused MCP tests and verify the new assertions fail**
 
 Run: `python3 -m unittest middleware.tests.test_mcp_client -v`
 
 Expected: existing protocol tests pass, and only the new logging assertions fail.
 
-- [ ] **Step 3: Add MCP start/call summaries**
+- [x] **Step 3: Add MCP start/call summaries**
 
 In `McpStdioClient.start`, measure the initialize handshake and emit `log_event("mcp", "send", request_id=f"MCP-{self._next_id}", operation="initialize", input_keys="capabilities,clientInfo,protocolVersion")` before `_request`, followed by `receive` with `outcome=success` and latency. On an `AdapterError` or startup exception, emit `error` with a fixed `error_code` or `error_type` and latency before preserving the current exception behavior.
 
 In `call_tool`, after validating the fixed tool name and mapping arguments, emit `send` with `operation="tools/call"`, the numeric MCP request ID, the validated tool name, and a sorted comma-separated list of top-level argument keys. Emit `receive` with `outcome=success` after a structured payload is returned. Catch `AdapterError` and unexpected exceptions only to emit safe `error`/`receive` summaries (`error_code` or exception class name), then re-raise unchanged. Do not pass `arguments`, `response`, `details`, or exception messages to `log_event`.
 
-- [ ] **Step 4: Run all MCP client tests**
+- [x] **Step 4: Run all MCP client tests**
 
 Run: `python3 -m unittest middleware.tests.test_mcp_client -v`
 
 Expected: all MCP start, success, timeout, EOF, malformed response, ID mismatch and tool error tests PASS, with safe log assertions included.
 
-- [ ] **Step 5: Commit MCP observability**
+- [x] **Step 5: Commit MCP observability**
 
 ```bash
 git add middleware/mcp_client.py middleware/tests/test_mcp_client.py
@@ -249,7 +249,7 @@ git commit -m "feat: log safe mcp adapter summaries"
 - Produces `[frontend]`, `[middleware]`, and `[backend]` request summaries with method/path/status/bytes or latency, never request body/header/query values.
 - Preserves all existing HTTP status codes, response payloads and handler routing.
 
-- [ ] **Step 1: Add failing HTTP log tests**
+- [x] **Step 1: Add failing HTTP log tests**
 
 Create a `unittest` fixture that starts the existing `create_http_server` functions on port `0`, uses a temporary backend data directory, and sends:
 
@@ -261,25 +261,25 @@ GET /mock/medical/v1/departments  # mock backend
 
 For each request, use `with self.assertLogs("ponte", level="INFO")` and assert the corresponding component, method, path, status and `latency_ms`/`bytes`. Send a body/header marker `PATIENT_SECRET_HTTP_VALUE` in one middleware/backend request and assert that the captured output contains neither that marker nor `Authorization`.
 
-- [ ] **Step 2: Run the new HTTP logging test and verify it fails**
+- [x] **Step 2: Run the new HTTP logging test and verify it fails**
 
 Run: `python3 -m unittest tests.test_terminal_observability -v`
 
 Expected: the requests still return their existing payloads, but the new log assertions fail because the handlers currently suppress access logging.
 
-- [ ] **Step 3: Implement frontend request logging**
+- [x] **Step 3: Implement frontend request logging**
 
 Replace `_StaticRequestHandler.log_message` with a safe `log_request` override. Use `urlsplit(self.path).path`, `self.command`, the status code supplied by `SimpleHTTPRequestHandler`, the supplied response size, and `time.monotonic()` captured at the beginning of each request. Emit `log_event("frontend", "request_end", method=..., path=..., status=..., bytes=..., latency_ms=...)`. Do not log `self.headers`, cookies, query values, or file contents.
 
-- [ ] **Step 4: Implement middleware request logging**
+- [x] **Step 4: Implement middleware request logging**
 
 At the start of `_handle`, generate a handler-local ID with `f"HTTP-MW-{uuid.uuid4().hex[:12].upper()}"`, capture `time.monotonic()`, derive only `urlsplit(self.path).path`, and emit `request_start`. Set `self._response_status` in `_send_json`; in a `finally` block in `_handle`, emit `request_end` with method/path/status/request ID/latency. Use status `500` if response construction itself fails. Keep `_send_json`, `_send_error`, CORS behavior and all existing response contracts unchanged.
 
-- [ ] **Step 5: Implement mock backend request logging**
+- [x] **Step 5: Implement mock backend request logging**
 
 At the start of `_handle`, retain the existing internal request ID, capture `time.monotonic()`, and emit `request_start` with method/path/request ID. In `_send`, set handler-local response status and byte count from the existing `BackendResponse`; in a `finally` block emit `request_end` with method/path/status/request ID/latency. Keep the parsed query and body inside the business request only; never pass them to `log_event`.
 
-- [ ] **Step 6: Run the HTTP logging and regression tests**
+- [x] **Step 6: Run the HTTP logging and regression tests**
 
 Run:
 
@@ -290,7 +290,7 @@ python3 -m unittest tests.test_frontend_static middleware.tests.test_server -v
 
 Expected: safe terminal assertions PASS and existing frontend/middleware HTTP behavior remains unchanged.
 
-- [ ] **Step 7: Commit HTTP observability**
+- [x] **Step 7: Commit HTTP observability**
 
 ```bash
 git add frontend/server.py middleware/server.py mock_backends/server.py tests/test_terminal_observability.py
@@ -311,21 +311,21 @@ git commit -m "feat: log safe http request summaries"
 - Produces a stack runner that loads local `.env` before spawning backend, middleware/MCP, and frontend, while preserving shell environment precedence.
 - Produces documentation for `PONTE_LOG_LEVEL=INFO`, component prefixes and safe-summary guarantees.
 
-- [ ] **Step 1: Add failing runner/config documentation assertions**
+- [x] **Step 1: Add failing runner/config documentation assertions**
 
 Extend `tests/test_run_stack.py` with a `middleware_environment` assertion that an existing `PONTE_LOG_LEVEL=DEBUG` value is preserved, and add a source/documentation assertion that `.env.example` contains `PONTE_LOG_LEVEL=INFO` and README documents `frontend`, `middleware`, `llm`, `mcp`, and `backend` prefixes.
 
-- [ ] **Step 2: Run the focused runner tests and verify the new assertions fail**
+- [x] **Step 2: Run the focused runner tests and verify the new assertions fail**
 
 Run: `python3 -m unittest tests.test_run_stack -v`
 
 Expected: existing runner tests pass and only the new configuration/documentation assertions fail.
 
-- [ ] **Step 3: Load `.env` before starting the stack**
+- [x] **Step 3: Load `.env` before starting the stack**
 
 In `scripts/run_stack.py`, call `load_dotenv()` at the start of `run_stack` before constructing child environments. Keep `middleware_environment` copying the current environment and overriding only `PONTE_BACKEND_URL`; do not print any environment value. This makes the safe logger level and the already-supported Gemini intent settings available to every child process without exposing them.
 
-- [ ] **Step 4: Add the documented configuration and terminal examples**
+- [x] **Step 4: Add the documented configuration and terminal examples**
 
 Add this line to `.env.example`:
 
@@ -342,7 +342,7 @@ rg '\\[(frontend|middleware|llm|mcp|backend)\\]' ponte-terminal.log
 
 Explain that logs show only safe metadata such as method/path/status, model/endpoint metadata, message character counts, normalized intent, tool name/input keys, outcome and latency; raw LLM content, credentials and medical payloads are never enabled by log level.
 
-- [ ] **Step 5: Run runner tests and documentation checks**
+- [x] **Step 5: Run runner tests and documentation checks**
 
 Run:
 
@@ -353,7 +353,7 @@ rg -n "PONTE_LOG_LEVEL|frontend|middleware|llm|mcp|backend|raw|API key" .env.exa
 
 Expected: all runner tests PASS and the documented configuration/filter/safety text is present.
 
-- [ ] **Step 6: Commit configuration and docs**
+- [x] **Step 6: Commit configuration and docs**
 
 ```bash
 git add scripts/run_stack.py tests/test_run_stack.py .env.example README.md middleware/README.md
@@ -365,7 +365,7 @@ git commit -m "docs: document terminal observability configuration"
 **Files:**
 - Modify only files needed to correct a failing test discovered in Tasks 1-5.
 
-- [ ] **Step 1: Run the complete Python test suites**
+- [x] **Step 1: Run the complete Python test suites**
 
 Run:
 
@@ -377,7 +377,7 @@ python3 -m unittest discover -s middleware/tests -q
 
 Expected: every suite exits with status 0; HTTP suites may require the local-socket test permission already used by this repository.
 
-- [ ] **Step 2: Run syntax and static checks**
+- [x] **Step 2: Run syntax and static checks**
 
 Run:
 
@@ -389,11 +389,11 @@ git diff --check
 
 Expected: no compiler, JavaScript syntax, or whitespace errors.
 
-- [ ] **Step 3: Perform the safe-summary smoke test**
+- [x] **Step 3: Perform the safe-summary smoke test**
 
 Start the stack with `PONTE_LOG_LEVEL=INFO python3 scripts/run_stack.py` in a terminal, send a frontend asset request and the existing read-only medical query through the browser or curl, and inspect the same terminal. Confirm prefixes `[frontend]`, `[middleware]`, `[llm]` when configured (or keyword fallback), `[mcp]`, and `[backend]`; confirm no API key, Authorization value, prompt, response body, patient data, or appointment payload appears.
 
-- [ ] **Step 4: Review the final diff and status**
+- [x] **Step 4: Review the final diff and status**
 
 Run:
 
