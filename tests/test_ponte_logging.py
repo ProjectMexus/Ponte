@@ -88,6 +88,36 @@ class PonteLoggingTests(unittest.TestCase):
             ):
                 log_debug_event("llm", "send_debug", prompt="PATIENT_PROMPT")
 
+    def test_debug_json_is_pretty_and_each_line_has_component_prefix(self):
+        stderr = io.StringIO()
+        with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "DEBUG"}):
+            with contextlib.redirect_stderr(stderr):
+                log_debug_event(
+                    "llm",
+                    "receive_debug",
+                    response={"status": 400, "error": {"message": "invalid"}},
+                    outcome="error",
+                )
+
+        lines = [line for line in stderr.getvalue().splitlines() if line]
+        self.assertGreater(len(lines), 4)
+        self.assertTrue(all(" DEBUG [llm] " in line for line in lines))
+        self.assertIn("response={", stderr.getvalue())
+        self.assertIn('    "message": "invalid"', stderr.getvalue())
+        self.assertIn('  outcome="error"', stderr.getvalue())
+
+    def test_debug_event_allows_response_unavailable(self):
+        stderr = io.StringIO()
+        with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "DEBUG"}):
+            with contextlib.redirect_stderr(stderr):
+                log_debug_event(
+                    "llm",
+                    "receive_debug",
+                    response_unavailable=True,
+                )
+
+        self.assertIn("response_unavailable=true", stderr.getvalue())
+
     def test_event_has_component_and_only_safe_fields(self):
         with self.assertLogs("ponte", level="INFO") as captured:
             log_event(
@@ -212,7 +242,9 @@ class PonteLoggingTests(unittest.TestCase):
         with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "INFO"}):
             with contextlib.redirect_stderr(stderr):
                 log_event("frontend", "request_end", method="GET", path="/", status=200)
-        self.assertIn("INFO [frontend] request_end", stderr.getvalue())
+        output = stderr.getvalue()
+        self.assertIn("INFO [frontend] request_end", output)
+        self.assertEqual(len(output.splitlines()), 1)
 
 
 if __name__ == "__main__":

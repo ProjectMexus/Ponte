@@ -58,6 +58,7 @@ _DEBUG_FIELDS = frozenset(
         "outcome",
         "error_code",
         "error_type",
+        "response_unavailable",
     }
 )
 _DEBUG_CREDENTIAL_KEYS = frozenset(
@@ -130,7 +131,23 @@ class _PonteStreamHandler(logging.StreamHandler):
         if isinstance(rendered_record.msg, str) and rendered_record.msg.startswith(prefix):
             rendered_record.msg = rendered_record.msg[len(prefix) :]
             rendered_record.args = ()
-        return super().format(rendered_record)
+
+        message = rendered_record.getMessage()
+        formatted = super().format(rendered_record)
+        if "\n" not in message:
+            return formatted
+
+        message_lines = message.split("\n")
+        formatted_lines = formatted.split("\n")
+        if len(message_lines) != len(formatted_lines):
+            return formatted
+
+        first_formatted_line = formatted_lines[0]
+        first_message_line = message_lines[0]
+        if not first_formatted_line.endswith(first_message_line):
+            return formatted
+        full_prefix = first_formatted_line[: -len(first_message_line)]
+        return "\n".join(f"{full_prefix}{line}" for line in message_lines)
 
 
 def _level_from_environment() -> int:
@@ -298,14 +315,14 @@ def log_debug_event(component: str, event: str, **fields: object) -> None:
             serialized_value = json.dumps(
                 redacted_value,
                 ensure_ascii=False,
-                separators=(",", ":"),
                 sort_keys=True,
+                indent=2,
             )
-            debug_fields.append(f"{name}={serialized_value}")
+            debug_fields.append(f"  {name}={serialized_value}")
 
         message = f"[{component}] {event_text}"
         if debug_fields:
-            message += " " + " ".join(debug_fields)
+            message += "\n" + "\n".join(debug_fields)
 
         _LOGGER.debug(message, extra={"component": component})
     except Exception:
