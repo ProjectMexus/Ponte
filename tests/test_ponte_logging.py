@@ -48,6 +48,20 @@ class PonteLoggingTests(unittest.TestCase):
         )
         self.assertEqual(endpoint_label("/api/intent?patient_id=SECRET#fragment"), "/api/intent")
 
+    def test_path_redacts_medical_identifier_segments(self):
+        with self.assertLogs("ponte", level="INFO") as captured:
+            log_event(
+                "backend",
+                "request_end",
+                method="GET",
+                path="/mock/medical/v1/appointments/APT-0001",
+                status=200,
+            )
+
+        output = "\n".join(captured.output)
+        self.assertIn("path=/mock/medical/v1/appointments/:id", output)
+        self.assertNotIn("APT-0001", output)
+
     def test_unknown_level_falls_back_to_info(self):
         with patch.dict(os.environ, {"PONTE_LOG_LEVEL": "NOT_A_LEVEL"}):
             with self.assertLogs("ponte", level="INFO") as captured:

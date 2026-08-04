@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import unittest
 from unittest.mock import patch
@@ -111,6 +113,38 @@ class IntentTests(unittest.TestCase):
         self.assertNotIn("API_KEY_SECRET", output)
         self.assertNotIn("Authorization", output)
         self.assertNotIn("test-key", output)
+
+    def test_llm_terminal_stderr_contains_only_safe_summary(self):
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions?secret=URL_SECRET",
+            api_key="API_KEY_SECRET",
+            model="test-model",
+            transport=lambda request, timeout: {
+                "choices": [{
+                    "message": {
+                        "content": (
+                            '{"intent":"medical_query","confidence":0.9,'
+                            '"response":"MEDICAL_RESPONSE_SECRET"}'
+                        ),
+                    },
+                }],
+            },
+        )
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            recognizer.recognize("PATIENT_PROMPT_SECRET")
+
+        output = stderr.getvalue()
+        self.assertIn("[llm] send", output)
+        self.assertIn("[llm] receive", output)
+        self.assertIn("model=test-model", output)
+        self.assertIn("intent=medical_query", output)
+        self.assertIn("confidence=0.9", output)
+        self.assertIn("latency_ms=", output)
+        self.assertNotIn("PATIENT_PROMPT_SECRET", output)
+        self.assertNotIn("MEDICAL_RESPONSE_SECRET", output)
+        self.assertNotIn("API_KEY_SECRET", output)
+        self.assertNotIn("URL_SECRET", output)
 
     def test_llm_recognizer_logs_safe_error_without_exception_message(self):
         def transport(request, timeout):

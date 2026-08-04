@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import logging
 import os
+import re
 import sys
 from urllib.parse import urlsplit
 
@@ -41,6 +42,10 @@ _SUPPORTED_FIELDS = frozenset(
 _HANDLER_MARKER = "_ponte_terminal_handler"
 _MAX_STRING_LENGTH = 120
 _MISSING = object()
+_UUID_SEGMENT = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+)
+_UPPERCASE_IDENTIFIER_SEGMENT = re.compile(r"^[A-Z0-9]+(?:-[A-Z0-9]+)+$")
 
 
 class _PonteStreamHandler(logging.StreamHandler):
@@ -113,7 +118,23 @@ def _path_label(value: object) -> str | object:
     if not isinstance(value, str):
         return _MISSING
     try:
-        return " ".join(urlsplit(value).path.split())[:_MAX_STRING_LENGTH]
+        segments = urlsplit(value).path.split("/")
+        safe_segments: list[str] = []
+        for index, segment in enumerate(segments):
+            if (
+                segment
+                and (
+                    index > 4
+                    or "%" in segment
+                    or segment.isdigit()
+                    or _UUID_SEGMENT.fullmatch(segment)
+                    or _UPPERCASE_IDENTIFIER_SEGMENT.fullmatch(segment)
+                )
+            ):
+                safe_segments.append(":id")
+            else:
+                safe_segments.append(" ".join(segment.split()))
+        return "/".join(safe_segments)[:_MAX_STRING_LENGTH]
     except Exception:
         return _MISSING
 
