@@ -18,7 +18,7 @@
 
 ## 非目標
 
-- 本次不接入新的實際 LLM provider，也不把原始 error、request ID、tool name 或 backend JSON 傳給使用者。
+- 本次不新增特定 provider；Task Recovery LLM 可透過獨立的 OpenAI-compatible endpoint 設定接入，並保留 deterministic fallback。不把原始 error、request ID、tool name 或 backend JSON 傳給使用者。
 - 本次不新增 durable task history API、browser storage 或 backend task schema。
 - 本次不讓 LLM 直接呼叫 tool、決定 URL／HTTP method，或跳過服務／時段／確認流程。
 - 本次不把自然語言補充輸入自動路由回同一 task；保留既有 `continueTask(taskId, input)` contract，供後續 LLM confirmation router 使用。
@@ -82,7 +82,9 @@ fail(state, message)
 
 `middleware/task_manager/recovery.py` 是 deterministic policy。它只使用白名單化的 error code、workflow step、目前 task data 及 backend 回傳的候選資料產生 `RecoveryPlan`；不執行 action。
 
-`middleware/task_manager/interpreter.py` 定義 Task Recovery LLM 的獨立介面。它接收已 sanitise 的 `ToolExecutionResult`、workflow step 和 `RecoveryPlan` context，輸出符合 `RecoveryPlan` 的 user-facing explanation、required fields 和 options；不接收原始 intent prompt，不負責 intent recognition，也不直接呼叫 tool。第一版由 deterministic recovery policy 實作 fallback，未來可注入獨立的 recovery LLM client。
+`middleware/task_manager/interpreter.py` 定義 Task Recovery LLM 的獨立介面和 OpenAI-compatible client。它接收已 sanitise 的 `ToolExecutionResult`、workflow step 和 `RecoveryPlan` context，輸出符合 `RecoveryPlan` 的 user-facing explanation、required fields 和 options；不接收原始 intent prompt，不負責 intent recognition，也不直接呼叫 tool。`PONTE_TASK_RECOVERY_LLM_API_URL` 留空時使用 deterministic recovery policy；設定後 provider 失敗仍回退到同一 policy。
+
+Task Recovery LLM 使用獨立的 `PONTE_TASK_RECOVERY_LLM_API_URL`、`PONTE_TASK_RECOVERY_LLM_API_KEY` 和 `PONTE_TASK_RECOVERY_LLM_MODEL`。它不能從 `PONTE_LLM_*` 隱式取得設定；failure 呼叫會記錄 `operation=task_recovery`，以便確認 backend error 確實經過 recovery interpretation。
 
 `middleware/task_manager/transitions.py` 定義狀態轉移規則。`awaiting_user_input` 可以回到 `querying`、`selecting_service`、`selecting_slot` 或 `awaiting_confirmation`，也可以轉為 `cancelled` 或 `human_handoff`；`completed`、`cancelled`、`failed` 和 `human_handoff` 是 terminal state。
 

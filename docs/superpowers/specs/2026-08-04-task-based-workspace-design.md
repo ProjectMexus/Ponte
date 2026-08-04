@@ -68,10 +68,10 @@ Intent LLM／intent recognizer 只負責理解使用者文字或語音並產生�
 - `contracts.py`：task state、transition、recovery plan 和對外 response 欄位；
 - `manager.py`：新 task、action chain、step/tool result、resume、cancel、complete 和 fail；
 - `recovery.py`：backend error 或空結果到 `RecoveryPlan` 的 deterministic mapping；
-- `interpreter.py`：Task Recovery LLM 的獨立介面與 deterministic fallback 對接；
+- `interpreter.py`：Task Recovery LLM 的獨立介面、獨立 provider 設定與 deterministic fallback 對接；
 - `transitions.py`：可允許狀態轉移與 terminal state 規則。
 
-`InteractionController` 保留 intent 辨識和 workflow 順序，不再直接散落修改 task lifecycle。`SessionState` 仍是 in-memory session 容器；Task Manager 是它與 execution pipeline 之間的 task adapter。Intent LLM 與 Task Recovery LLM 分開管理，後者只能讀取白名單化的 backend result／`RecoveryPlan` context，再透過既有 action 或 `continueTask()` contract 繼續任務。
+`InteractionController` 保留 intent 辨識和 workflow 順序，不再直接散落修改 task lifecycle。`SessionState` 仍是 in-memory session 容器；Task Manager 是它與 execution pipeline 之間的 task adapter。Intent LLM 與 Task Recovery LLM 分開管理，後者只能讀取白名單化的 backend result／`RecoveryPlan` context，再透過既有 action 或 `continueTask()` contract 繼續任務。兩者分別使用 `PONTE_LLM_*` 和 `PONTE_TASK_RECOVERY_LLM_*` 設定；recovery endpoint 未設定或呼叫失敗時才使用 deterministic fallback，並記錄 `operation=task_recovery` 的結果。
 
 ## 任務模型與擴展接口
 

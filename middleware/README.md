@@ -62,7 +62,9 @@ curl http://127.0.0.1:8090/api/health
 
 `/api/health` 會實際呼叫 `medical.list_departments`；bridge 本身仍然運作但 backend 未啟動時，HTTP 仍回 200，`backend_reachable` 會是 `false`。session state 只保存在記憶體，middleware 重啟後會遺失。
 
-Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_URL`，middleware 會優先使用 OpenAI-compatible chat-completions API；使用 Gemini 時，請設定 `PONTE_LLM_API_URL=https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` 及 `PONTE_LLM_MODEL=gemini-2.5-flash-lite`，再在本地填入 Google AI Studio API key。LLM 未設定、回應格式錯誤或網絡呼叫失敗時，會自動 fallback 到 keyword recognizer；API key 不應寫入 repository。
+Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_URL`，middleware 會優先使用 OpenAI-compatible chat-completions API；使用 Gemini 時，請設定 `PONTE_LLM_API_URL=https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` 及 `PONTE_LLM_MODEL=gemini-2.5-flash-lite`，再在本地填入 Google AI Studio API key。LLM 未設定、回應格式錯誤或網絡呼叫失敗時，會自動 fallback 到 keyword recognizer。
+
+Task Recovery LLM 使用另一組獨立設定：`PONTE_TASK_RECOVERY_LLM_API_URL`、`PONTE_TASK_RECOVERY_LLM_API_KEY` 和 `PONTE_TASK_RECOVERY_LLM_MODEL`。它只接收經過 allowlist/sanitization 的 backend/tool failure、workflow step 和 task data，不能接收 Intent prompt、authorization、patient context 或 raw tool arguments；輸出必須先驗證為 `RecoveryPlan`。URL 留空時使用 deterministic recovery fallback；設定後，每次 failure 會以 `[llm] operation=task_recovery` 記錄呼叫和結果。兩組 LLM 設定都不要提交 API key。
 
 ## 環境設定
 
@@ -76,6 +78,9 @@ Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_UR
 | `PONTE_LLM_API_URL` | 空值 | LLM intent endpoint；Gemini 示例為 `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`，未設定時只使用 keyword。 |
 | `PONTE_LLM_API_KEY` | 空值 | LLM API bearer token；不要寫入 repository。 |
 | `PONTE_LLM_MODEL` | `gpt-4o-mini` | LLM 使用的 model 名稱；`.env.example` 示範 `gemini-2.5-flash-lite`。 |
+| `PONTE_TASK_RECOVERY_LLM_API_URL` | 空值 | 獨立 Task Recovery LLM endpoint；未設定時使用 deterministic recovery fallback。 |
+| `PONTE_TASK_RECOVERY_LLM_API_KEY` | 空值 | Task Recovery LLM API bearer token；不要寫入 repository。 |
+| `PONTE_TASK_RECOVERY_LLM_MODEL` | `gpt-4o-mini` | Task Recovery LLM model；可獨立於 Intent LLM 選擇。 |
 
 ## HTTP API
 

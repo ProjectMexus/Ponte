@@ -39,7 +39,9 @@ mock_backends/           One Account / Medical / Social Welfare
 cp .env.example .env
 ```
 
-要使用 Gemini 做 Intent LLM recognition，請在本地 `.env` 填入 Google AI Studio API key。`.env.example` 已示範 Ponte 所需的 OpenAI-compatible endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` 及低成本模型 `gemini-2.5-flash-lite`；API key 只放在本地設定，不要提交到 repository。若 `PONTE_LLM_API_URL` 留空，middleware 會只使用 keyword intent recognition。Task Recovery LLM 是另一個獨立邊界；目前使用 middleware 內的 deterministic recovery fallback，不共用 Intent LLM 的輸入或設定。
+要使用 Gemini 做 Intent LLM recognition，請在本地 `.env` 填入 Google AI Studio API key。`.env.example` 已示範 Ponte 所需的 OpenAI-compatible endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` 及低成本模型 `gemini-2.5-flash-lite`；API key 只放在本地設定，不要提交到 repository。若 `PONTE_LLM_API_URL` 留空，middleware 會只使用 keyword intent recognition。
+
+Task Recovery LLM 是另一個獨立邊界，必須另外設定 `PONTE_TASK_RECOVERY_LLM_API_URL`、`PONTE_TASK_RECOVERY_LLM_API_KEY` 和 `PONTE_TASK_RECOVERY_LLM_MODEL`；它使用獨立的 prompt、sanitized backend/tool context 和 `RecoveryPlan` parser，不共用 Intent LLM 的輸入或執行入口。設定 recovery endpoint 後，backend/tool failure 會在 log 看到 `[llm]` 的 `operation=task_recovery`；若 URL 留空或 provider 呼叫失敗，middleware 會記錄 deterministic fallback 並使用內建 recovery policy。
 
 在 repository 根目錄執行完整 stack：
 
