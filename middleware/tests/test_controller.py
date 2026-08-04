@@ -2,7 +2,7 @@ import unittest
 
 from middleware.contracts import InteractionActionRequest, InteractionRequest, ToolExecutionResult
 from middleware.controller import InteractionController
-from middleware.intent import IntentDecision, IntentRecognizer
+from middleware.intent import IntentDecision, IntentRecognizer, KeywordIntentRecognizer
 from middleware.session import SessionStore
 
 
@@ -69,7 +69,13 @@ class AlwaysGeneralRecognizer(IntentRecognizer):
 class ControllerTests(unittest.TestCase):
     def setUp(self):
         self.pipeline = RecordingPipeline()
-        self.controller = InteractionController(self.pipeline, SessionStore(), "PAT-DEMO-001", "Bearer mock-user-token")
+        self.controller = InteractionController(
+            self.pipeline,
+            SessionStore(),
+            "PAT-DEMO-001",
+            "Bearer mock-user-token",
+            intent_recognizer=KeywordIntentRecognizer(),
+        )
 
     def test_medical_query_loads_only_my_appointments(self):
         response = self.controller.handle_message(

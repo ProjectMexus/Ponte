@@ -4,6 +4,7 @@ import unittest
 from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
 
+from middleware.intent import KeywordIntentRecognizer
 from middleware.server import create_application, create_http_server
 
 
@@ -32,6 +33,7 @@ class ServerTests(unittest.TestCase):
             "PAT-DEMO-001",
             "Bearer mock-user-token",
             mcp_client=cls.mcp_client,
+            intent_recognizer=KeywordIntentRecognizer(),
         )
         cls.server = create_http_server("127.0.0.1", 0, cls.application)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
