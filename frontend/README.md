@@ -30,9 +30,9 @@ http://127.0.0.1:15173/?middleware=http://127.0.0.1:18090
 - 文字輸入及快捷需求按鈕。
 - 支援 `SpeechRecognition` / `webkitSpeechRecognition` 時，以 `zh-HK` 取得粵語 transcript；transcript 會先回填文字框，使用者按送出後才傳給 middleware。
 - 支援 `speechSynthesis` 時朗讀助手回覆，並提供停止朗讀控制。
-- Middleware 返回的 task steps、tool events、服務資料、選項和確認操作會在畫面上顯示。
+- Middleware 返回的服務進度、可讀的服務／日期／時間／地點摘要、選項和確認操作會在畫面上顯示；API 工具名稱、請求編號和原始 backend 欄位不會展示給一般使用者。
 - 可用文字輸入測試自然語言 workflow：`我想查詢自己的醫療預約` 是只讀查詢，只展示 `medical.get_my_appointments` 的結果；`我想預約醫療服務` 會讓使用者選擇服務和日期範圍，展示 `medical.search_appointment_slots` 返回的可預約時段，再經確認建立 mock 預約。預約後再次輸入前一個查詢即可讀回記錄；另外也可測試 `我想查現金分享計劃` 和 `我想找長者文娛活動`。
-- 可用相同文字輸入測試固定 MCP tool：`mcp <tool-name> <JSON input>`，例如 `mcp medical.list_departments {}`。畫面會展示 tool event、HTTP contract 和 backend JSON；POST tool 會先顯示 `confirm_tool` 確認操作，未確認前不會改變 mock state。
+- 開發者整合測試仍保留固定 MCP tool 的 `confirm_tool` 確認 action 和既有 `sendAction` contract；這些技術細節不會出現在一般服務工作區。
 - middleware 連線錯誤不會清空既有對話或停用文字輸入。
 
 ## 驗證
@@ -45,4 +45,4 @@ node --check frontend/interaction-view.js
 node --check frontend/speech.js
 ```
 
-完整驗收流程請參考 repo 根目錄的 `README.md`：輸入上述任一需求並送出，畫面應顯示 middleware 已連線、對應 task state，以及由 MCP 回傳的 tool event。
+完整驗收流程請參考 repo 根目錄的 `README.md`：輸入上述任一需求並送出，畫面應顯示 middleware 已連線、對應進度，以及可讀的服務資料摘要。

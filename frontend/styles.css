@@ -114,7 +114,6 @@ h2 {
   padding-top: 10px;
 }
 
-.mode-badge,
 .helper-pill,
 .visible-execution,
 .health-status {
@@ -125,11 +124,6 @@ h2 {
   border-radius: 999px;
   font-size: 0.82rem;
   font-weight: 700;
-}
-
-.mode-badge {
-  color: var(--orange-700);
-  background: var(--orange-100);
 }
 
 .health-status {
@@ -467,53 +461,35 @@ textarea::placeholder {
   background: #fbfdfc;
 }
 
-.data-card,
-.tool-event-card,
-.confirmation-card {
-  padding: 16px;
-  border: 1px solid #d4e0de;
-  border-radius: 14px;
-  background: #ffffff;
+.summary-card {
+  padding: 18px;
+  border: 1px solid #c9ddda;
+  border-radius: 16px;
+  background: #fbfdfc;
 }
 
-.data-card h3,
-.confirmation-card h3 {
-  margin: 0 0 8px;
-  font-size: 1.05rem;
+.summary-card h3 {
+  margin: 0 0 12px;
+  color: var(--teal-900);
+  font-size: 1.08rem;
 }
 
-.data-card dl {
+.summary-card dl {
   display: grid;
-  grid-template-columns: minmax(100px, 0.7fr) minmax(0, 1.3fr);
-  gap: 6px 12px;
+  grid-template-columns: minmax(96px, 0.7fr) minmax(0, 1.3fr);
+  gap: 8px 14px;
   margin: 0;
 }
 
-.data-card dt {
+.summary-card dt {
   color: var(--muted);
   font-size: 0.82rem;
 }
 
-.data-card dd {
+.summary-card dd {
   margin: 0;
   overflow-wrap: anywhere;
-  font-weight: 700;
-}
-
-.tool-event-card {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  font-size: 0.78rem;
-}
-
-.tool-event-card strong {
-  color: var(--teal-900);
-}
-
-.tool-event-meta {
-  grid-column: 1 / -1;
-  color: var(--muted);
+  font-weight: 800;
 }
 
 .action-list {
