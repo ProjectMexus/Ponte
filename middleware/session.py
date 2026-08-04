@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any, Sequence
@@ -23,6 +24,7 @@ class SessionState:
     last_tool_call: ToolCall | None = None
     confirmation_record: dict[str, Any] | None = None
     last_error: dict[str, Any] | None = None
+    recovery: dict[str, Any] | None = None
 
     def reset_for_new_task(self) -> None:
         """Clear the current workflow before handling a new high-level request."""
@@ -35,6 +37,7 @@ class SessionState:
         self.last_tool_call = None
         self.confirmation_record = None
         self.last_error = None
+        self.recovery = None
 
 
 class SessionStore:
@@ -78,6 +81,26 @@ def build_response(
             public_action["kind"] = public_action["action"]
         public_actions.append(public_action)
 
+    recovery = state.recovery
+    if isinstance(recovery, Mapping):
+        options = recovery.get("options")
+        if isinstance(options, list):
+            for option in options:
+                if not isinstance(option, Mapping):
+                    continue
+                action = option.get("action")
+                label = option.get("label")
+                payload = option.get("payload", {})
+                if not isinstance(action, str) or not action or not isinstance(label, str) or not label:
+                    continue
+                if not isinstance(payload, Mapping):
+                    payload = {}
+                public_actions.append({
+                    "kind": action,
+                    "label": label,
+                    "payload": deepcopy(dict(payload)),
+                })
+
     response: dict[str, Any] = {
         "session_id": state.session_id,
         "assistant_message": assistant_message,
@@ -90,4 +113,6 @@ def build_response(
     }
     if state.last_error is not None:
         response["error"] = deepcopy(state.last_error)
+    if recovery is not None:
+        response["recovery"] = deepcopy(recovery)
     return response

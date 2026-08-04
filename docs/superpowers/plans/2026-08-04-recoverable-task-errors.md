@@ -322,7 +322,7 @@ git commit -m "feat: separate task recovery interpretation"
 - Consumes: `SessionState`, `ToolExecutionResult`, Task Manager contracts, recovery policy and the separate `TaskRecoveryInterpreter`.
 - Produces: `TaskManager(state)` with lifecycle methods used by the controller.
 
-- [ ] **Step 1: Add recovery storage to `SessionState`**
+- [x] **Step 1: Add recovery storage to `SessionState`**
 
 Add:
 
@@ -332,7 +332,7 @@ recovery: dict[str, Any] | None = None
 
 Clear it in `reset_for_new_task()`. Include a deep-copied `recovery` field in `build_response()` only when it is not `None`; keep the existing `error` field and all existing response keys unchanged. The serializer must project every `RecoveryOption` from `recovery.options` into the existing action shape `{"kind": option.action, "label": option.label, "payload": option.payload}` so the frontend can execute only the established action contract.
 
-- [ ] **Step 2: Implement lifecycle helpers**
+- [x] **Step 2: Implement lifecycle helpers**
 
 Implement the following methods in `TaskManager`:
 
@@ -354,6 +354,7 @@ class TaskManager:
         *,
         safe_for_retry: bool,
         workflow: str,
+        call: ToolCall | None = None,
     ) -> None:
         raise NotImplementedError
     def request_user_input(self, plan: RecoveryPlan) -> None:
@@ -370,11 +371,11 @@ class TaskManager:
 
 `record_tool_result()` must append the same safe event shape currently emitted by `_run_tool`, append the step, update `last_tool_call` only when `safe_for_retry` is true, and set a normalized `last_error` on failure. It must not expose raw tool arguments in the `recovery` user text.
 
-- [ ] **Step 3: Apply recovery or hard-failure state**
+- [x] **Step 3: Apply recovery or hard-failure state**
 
 When `record_tool_result()` receives a failed result, call `build_recovery_plan()` with the current `state.data`, then pass the sanitized context and deterministic fallback to the injected `TaskRecoveryInterpreter`. If the interpreter returns a valid plan, call `request_user_input()` and leave existing workflow data intact. If it returns `None`, call `fail()` and use the existing safe assistant-level failure message supplied by the controller. The default interpreter is deterministic and does not call `IntentRecognizer`.
 
-- [ ] **Step 4: Add manager unit tests**
+- [x] **Step 4: Add manager unit tests**
 
 Assert that:
 
@@ -389,7 +390,7 @@ self.assertEqual(state.data["service_id"], "SERVICE-US-001")
 
 Also assert `start_action()` clears the previous recovery/error but not services, dates, slots or selected slot; `reset_for_new_task()` clears all workflow transient data; and injecting a fake `TaskRecoveryInterpreter` cannot change intent-recognizer calls.
 
-- [ ] **Step 5: Run focused session and manager tests**
+- [x] **Step 5: Run focused session and manager tests**
 
 Run:
 
@@ -399,7 +400,7 @@ python -m unittest middleware.tests.test_task_manager middleware.tests.test_cont
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the state integration**
+- [x] **Step 6: Commit the state integration**
 
 ```powershell
 git add middleware/session.py middleware/task_manager/manager.py middleware/tests/test_task_manager.py

@@ -1,6 +1,7 @@
 import unittest
 
 from middleware.session import SessionState, build_response
+from middleware.contracts import ToolCall, ToolExecutionResult
 from middleware.task_manager.contracts import RecoveryOption, RecoveryPlan
 from middleware.task_manager.transitions import InvalidTaskTransition, ensure_transition
 
@@ -42,6 +43,53 @@ class TaskManagerContractTests(unittest.TestCase):
         self.assertEqual(response["task_state"], "awaiting_user_input")
         self.assertEqual(response["recovery"]["reason_code"], "MISSING_REQUIRED_FIELD")
         self.assertEqual(response["actions"][0]["kind"], "cancel")
+
+    def test_tool_failure_keeps_workflow_data_and_records_retry_call(self):
+        from middleware.task_manager.manager import TaskManager
+
+        state = SessionState("S-RECOVER-MANAGER")
+        state.data.update({
+            "intent": "medical_booking",
+            "service_id": "SERVICE-US-001",
+            "date_from": "2026-08-10",
+            "date_to": "2026-08-14",
+        })
+        manager = TaskManager(state)
+        manager.transition("querying", "search_slots")
+        call = ToolCall(
+            "medical.search_appointment_slots",
+            {"context": {}, "input": {"service_id": "SERVICE-US-001"}},
+            "search_slots",
+        )
+        result = ToolExecutionResult(
+            call.name,
+            call.step_id,
+            False,
+            "REQ-TIMEOUT",
+            None,
+            {"code": "BACKEND_TIMEOUT", "message": "timeout", "retryable": True},
+        )
+
+        manager.record_tool_result(
+            result,
+            "search_slots",
+            {"service_id": "SERVICE-US-001"},
+            safe_for_retry=True,
+            workflow="medical_booking",
+            call=call,
+        )
+
+        self.assertEqual(state.task_state, "awaiting_user_input")
+        self.assertIsNotNone(state.recovery)
+        self.assertIs(state.last_tool_call, call)
+        self.assertEqual(state.data["service_id"], "SERVICE-US-001")
+        self.assertEqual(state.data["date_from"], "2026-08-10")
+        self.assertEqual(state.tool_events[0]["error"]["code"], "BACKEND_TIMEOUT")
+
+        manager.start_action()
+        self.assertIsNone(state.recovery)
+        self.assertIsNone(state.last_error)
+        self.assertEqual(state.data["service_id"], "SERVICE-US-001")
 
 
 if __name__ == "__main__":
