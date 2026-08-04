@@ -63,6 +63,25 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertRegex(css, r"min-height:\s*56px")
         self.assertIn(":focus-visible", css)
 
+    def test_styles_keep_desktop_conversation_reachable(self):
+        css = Path("frontend/styles.css").read_text(encoding="utf-8")
+        self.assertRegex(
+            css,
+            r"\.conversation-panel\s*\{[^}]*position:\s*sticky;[^}]*height:\s*calc\(100dvh - 40px\);",
+        )
+        self.assertRegex(
+            css,
+            r"\.workspace-panel\s*\{[^}]*height:\s*calc\(100dvh - 40px\);[^}]*overflow-y:\s*auto;",
+        )
+        self.assertRegex(
+            css,
+            r"\.conversation-list\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;",
+        )
+        self.assertRegex(
+            css,
+            r"@media\s*\(max-width:\s*900px\)[\s\S]*?\.conversation-panel,\s*\.workspace-panel\s*\{[^}]*position:\s*static;[^}]*height:\s*auto;[^}]*overflow:\s*visible;",
+        )
+
     def test_view_module_exports_renderer(self):
         js = Path("frontend/interaction-view.js").read_text(encoding="utf-8")
         self.assertIn("createInteractionView", js)

@@ -165,14 +165,22 @@ h2 {
 
 .conversation-panel {
   display: flex;
-  min-height: 720px;
+  position: sticky;
+  top: 20px;
+  height: calc(100dvh - 40px);
+  min-height: 0;
   flex-direction: column;
+  overflow: hidden;
   padding: 30px;
 }
 
 .workspace-panel {
   position: sticky;
   top: 20px;
+  height: calc(100dvh - 40px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 26px;
 }
 
@@ -196,11 +204,12 @@ h2 {
 
 .conversation-list {
   display: flex;
-  min-height: 310px;
+  min-height: 0;
   flex: 1;
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px 4px 22px;
 }
 
@@ -601,8 +610,18 @@ textarea::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .conversation-panel,
   .workspace-panel {
     position: static;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .conversation-list {
+    flex: 0 0 auto;
+    min-height: 310px;
+    overflow-y: visible;
   }
 }
 
