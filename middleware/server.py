@@ -41,10 +41,12 @@ class MiddlewareApplication:
         *,
         frontend_origins: tuple[str, ...] = (),
         mcp_client: McpStdioClient | None = None,
+        mock_user_id: str = "USR-DEMO-001",
     ) -> None:
         self.backend_url = backend_url.rstrip("/")
         self.patient_id = patient_id
         self.authorization = authorization
+        self.mock_user_id = mock_user_id
         self.frontend_origins = frontend_origins
         self.registry = build_registry()
         self.mcp_client = mcp_client or McpStdioClient(self.backend_url)
@@ -58,6 +60,7 @@ class MiddlewareApplication:
             self.sessions,
             patient_id,
             authorization,
+            mock_user_id=mock_user_id,
         )
 
     def close(self) -> None:
@@ -85,6 +88,7 @@ def create_application(
     authorization: str,
     *,
     mcp_client: McpStdioClient | None = None,
+    mock_user_id: str = "USR-DEMO-001",
 ) -> MiddlewareApplication:
     """Create one isolated middleware application with in-memory sessions."""
 
@@ -96,6 +100,7 @@ def create_application(
         authorization,
         frontend_origins=origins,
         mcp_client=mcp_client,
+        mock_user_id=mock_user_id,
     )
 
 
@@ -206,6 +211,7 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
                     {
                         "context": {
                             "authorization": application.authorization,
+                            "mock_user_id": application.mock_user_id,
                             "accept_language": "zh-TW",
                             "request_id": _request_id(),
                         },
@@ -312,6 +318,7 @@ def _safe_tool_arguments(arguments: dict[str, Any], application: MiddlewareAppli
     safe_context = dict(context)
     safe_context["authorization"] = application.authorization
     safe_context["patient_id"] = application.patient_id
+    safe_context["mock_user_id"] = application.mock_user_id
     safe_context["accept_language"] = "zh-TW"
     safe_context["request_id"] = _request_id()
     return {"context": safe_context, "input": dict(input_data)}
@@ -337,6 +344,7 @@ def main() -> None:
         os.environ.get("PONTE_BACKEND_URL", "http://127.0.0.1:8080"),
         os.environ.get("PONTE_PATIENT_ID", "PAT-DEMO-001"),
         os.environ.get("PONTE_AUTHORIZATION", "Bearer mock-user-token"),
+        mock_user_id=os.environ.get("PONTE_MOCK_USER_ID", "USR-DEMO-001"),
     )
     server = create_http_server(args.host, args.port, application)
     print(f"Ponte middleware listening on http://{args.host}:{server.server_port}")

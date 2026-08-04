@@ -30,7 +30,7 @@ python3 -m middleware.server --host 127.0.0.1 --port 8090
 python3 scripts/run_stack.py
 ```
 
-這個 runner 會啟動 backend、middleware、middleware 管理的 MCP stdio server 和 frontend。瀏覽器輸入「我想查詢醫療預約」後，應看到 `selecting_service`、服務已連線，以及兩個 medical tool events。
+這個 runner 會啟動 backend、middleware、middleware 管理的 MCP stdio server 和 frontend。瀏覽器輸入「我想查詢醫療預約」後，應看到 `selecting_service`、服務已連線，以及兩個 medical tool events。也可以輸入「我想查現金分享計劃」或「我想找長者文娛活動」測試只讀的一戶通／長者活動 workflow。
 
 檢查 middleware 和 backend：
 
@@ -49,6 +49,7 @@ Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_UR
 | `PONTE_BACKEND_URL` | `http://127.0.0.1:8080` | 傳給 middleware 管理的 MCP child，再由 MCP RestAdapter 使用；path 和 method 仍由固定 registry 決定。 |
 | `PONTE_FRONTEND_ORIGINS` | `http://127.0.0.1:5173,http://localhost:5173` | 逗號分隔的 CORS origin allowlist。 |
 | `PONTE_PATIENT_ID` | `PAT-DEMO-001` | Interaction Controller 使用的 mock patient context。 |
+| `PONTE_MOCK_USER_ID` | `USR-DEMO-001` | 一戶通及長者活動 workflow 使用的 mock user context。 |
 | `PONTE_AUTHORIZATION` | `Bearer mock-user-token` | Interaction Controller 使用的 mock authorization context。 |
 | `PONTE_LLM_API_URL` | 空值 | LLM intent endpoint，例如 `https://api.example.com/v1/chat/completions`；未設定時只使用 keyword。 |
 | `PONTE_LLM_API_KEY` | 空值 | LLM API bearer token；不要寫入 repository。 |
@@ -91,7 +92,17 @@ Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_UR
 }
 ```
 
-`source` 可為 `text` 或 `voice`。辨識到醫療意圖後，controller 會依序查詢我的預約和可預約服務，並回傳 `task_state`、`current_step`、`steps`、`tool_events`、`actions` 和 `data`。
+`source` 可為 `text` 或 `voice`。辨識到醫療意圖後，controller 會依序查詢我的預約和可預約服務；辨識到現金分享或長者活動意圖後，會執行對應的只讀查詢。三種 workflow 都會回傳 `task_state`、`current_step`、`steps`、`tool_events`、`actions` 和 `data`。
+
+可直接輸入以下訊息測試自然語言 workflow：
+
+```text
+我想查現金分享計劃
+我想找長者文娛活動
+```
+
+它們分別呼叫 `one_account.get_cash_sharing_plan`（input `{}`）及
+`one_account.search_elderly_activities`（input `{"available_only": true}`）。
 
 ### `POST /api/interactions/action`
 

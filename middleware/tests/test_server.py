@@ -10,12 +10,13 @@ from middleware.server import create_application, create_http_server
 class RecordingMcpClient:
     def __init__(self):
         self.closed = False
+        self.calls = []
 
     def start(self):
         return None
 
     def call_tool(self, name, arguments):
-        del name, arguments
+        self.calls.append((name, arguments))
         return {"request_id": "REQ-TEST", "data": {"departments": []}}
 
     def close(self):
@@ -57,6 +58,19 @@ class ServerTests(unittest.TestCase):
     def test_server_close_closes_mcp_client(self):
         self.application.close()
         self.assertTrue(self.mcp_client.closed)
+
+    def test_message_workflow_passes_mock_user_id_to_mcp_context(self):
+        status, payload = self.request("POST", "/api/interactions/message", {
+            "session_id": "S-SERVER-CASH",
+            "message": "我想查現金分享計劃",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["task_state"], "completed")
+        self.assertEqual(self.mcp_client.calls[-1][0], "one_account.get_cash_sharing_plan")
+        self.assertEqual(
+            self.mcp_client.calls[-1][1]["context"]["mock_user_id"],
+            "USR-DEMO-001",
+        )
 
     def test_malformed_json_is_safe_client_error(self):
         request = Request(self.base_url + "/api/interactions/message", data=b"{", method="POST", headers={"Content-Type": "application/json"})

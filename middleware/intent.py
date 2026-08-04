@@ -12,7 +12,12 @@ from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
 
-IntentName = Literal["medical_appointment", "general"]
+IntentName = Literal[
+    "medical_appointment",
+    "cash_sharing",
+    "elderly_activity",
+    "general",
+]
 IntentSource = Literal["keyword", "llm"]
 
 
@@ -29,6 +34,14 @@ class IntentDecision:
     def is_medical(self) -> bool:
         return self.intent == "medical_appointment"
 
+    @property
+    def is_cash_sharing(self) -> bool:
+        return self.intent == "cash_sharing"
+
+    @property
+    def is_elderly_activity(self) -> bool:
+        return self.intent == "elderly_activity"
+
 
 class IntentRecognitionError(RuntimeError):
     """Raised when an LLM response cannot be used as an intent decision."""
@@ -43,16 +56,31 @@ class IntentRecognizer(ABC):
 
 
 class KeywordIntentRecognizer(IntentRecognizer):
-    """Deterministic fallback for the first medical intent group."""
+    """Deterministic fallback for the supported domain intent groups."""
 
+    DEFAULT_CASH_SHARING_TERMS = ("現金分享", "現金分享計劃")
+    DEFAULT_ELDERLY_ACTIVITY_TERMS = ("長者活動", "文娛活動", "興趣班")
     DEFAULT_MEDICAL_TERMS = ("醫療", "預約", "覆診", "睇醫生", "改期")
 
-    def __init__(self, medical_terms: tuple[str, ...] | None = None) -> None:
+    def __init__(
+        self,
+        medical_terms: tuple[str, ...] | None = None,
+        cash_sharing_terms: tuple[str, ...] | None = None,
+        elderly_activity_terms: tuple[str, ...] | None = None,
+    ) -> None:
+        self.cash_sharing_terms = cash_sharing_terms or self.DEFAULT_CASH_SHARING_TERMS
+        self.elderly_activity_terms = elderly_activity_terms or self.DEFAULT_ELDERLY_ACTIVITY_TERMS
         self.medical_terms = medical_terms or self.DEFAULT_MEDICAL_TERMS
 
     def recognize(self, message: str) -> IntentDecision:
         if not isinstance(message, str):
             raise ValueError("message must be a string")
+        for term in self.cash_sharing_terms:
+            if term in message:
+                return IntentDecision("cash_sharing", "keyword", 1.0, term)
+        for term in self.elderly_activity_terms:
+            if term in message:
+                return IntentDecision("elderly_activity", "keyword", 1.0, term)
         for term in self.medical_terms:
             if term in message:
                 return IntentDecision("medical_appointment", "keyword", 1.0, term)
@@ -94,7 +122,10 @@ class LlmIntentRecognizer(IntentRecognizer):
                     "role": "system",
                     "content": (
                         "你是 Ponte 的 intent classifier。只能返回 JSON object，格式為 "
-                        '{"intent":"medical_appointment"或"general","confidence":0到1}。'
+                        '{"intent":"medical_appointment"、"cash_sharing"、"elderly_activity"或"general",'
+                        '"confidence":0到1}。'
+                        "cash_sharing 包括現金分享或現金分享計劃；"
+                        "elderly_activity 包括長者活動、文娛活動或興趣班；"
                         "medical_appointment 包括醫療、預約、覆診、睇醫生或改期；"
                         "其他內容使用 general。"
                     ),
@@ -175,6 +206,10 @@ class LlmIntentRecognizer(IntentRecognizer):
         normalized = value.strip().casefold()
         if normalized in {"medical", "medical_appointment", "appointment", "booking"}:
             return "medical_appointment"
+        if normalized in {"cash", "cash_sharing"}:
+            return "cash_sharing"
+        if normalized in {"activity", "elderly_activity"}:
+            return "elderly_activity"
         if normalized in {"general", "other", "unknown", "none"}:
             return "general"
         raise IntentRecognitionError("LLM returned an unsupported intent")

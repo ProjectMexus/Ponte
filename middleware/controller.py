@@ -1,4 +1,4 @@
-"""Deterministic interaction controller for Ponte medical assistance."""
+"""Deterministic interaction controller for Ponte service assistance."""
 
 from __future__ import annotations
 
@@ -28,11 +28,14 @@ class InteractionController:
         patient_id: str,
         authorization: str,
         intent_recognizer: IntentRecognizer | None = None,
+        *,
+        mock_user_id: str = "USR-DEMO-001",
     ) -> None:
         self.pipeline = pipeline
         self.sessions = sessions
         self.patient_id = _required_string(patient_id, "patient_id")
         self.authorization = _required_string(authorization, "authorization")
+        self.mock_user_id = _required_string(mock_user_id, "mock_user_id")
         self.intent_recognizer = intent_recognizer or build_intent_recognizer()
 
     def handle_message(self, request: InteractionRequest) -> dict[str, Any]:
@@ -44,6 +47,10 @@ class InteractionController:
         intent = self.intent_recognizer.recognize(request.message)
         state.data["intent"] = intent.intent
         state.data["intent_source"] = intent.source
+        if intent.is_cash_sharing:
+            return self._handle_cash_sharing(state)
+        if intent.is_elderly_activity:
+            return self._handle_elderly_activity(state)
         if not intent.is_medical:
             state.task_state = "idle"
             state.current_step = "welcome"
@@ -85,6 +92,40 @@ class InteractionController:
             "我已查到你的預約和可預約服務，請選擇你想預約的服務。",
             [{"action": "search_slots", "label": "搜尋可預約時段"}],
         )
+
+    def _handle_cash_sharing(self, state: SessionState) -> dict[str, Any]:
+        state.task_state = "querying"
+        state.current_step = "load_cash_sharing_plan"
+        result = self._run_tool(
+            state,
+            "one_account.get_cash_sharing_plan",
+            "load_cash_sharing_plan",
+            {},
+        )
+        data = self._result_data(state, result, "load_cash_sharing_plan")
+        if data is None:
+            return build_response(state, "暫時無法查詢現金分享計劃，請稍後再試。", [])
+        state.data["cash_sharing_plan"] = data
+        state.task_state = "completed"
+        state.current_step = "cash_sharing_plan"
+        return build_response(state, "我已查到你的現金分享計劃資料。", [])
+
+    def _handle_elderly_activity(self, state: SessionState) -> dict[str, Any]:
+        state.task_state = "querying"
+        state.current_step = "search_elderly_activities"
+        result = self._run_tool(
+            state,
+            "one_account.search_elderly_activities",
+            "search_elderly_activities",
+            {"available_only": True},
+        )
+        data = self._result_data(state, result, "search_elderly_activities")
+        if data is None:
+            return build_response(state, "暫時無法查詢長者文娛活動，請稍後再試。", [])
+        state.data["activities"] = data
+        state.task_state = "completed"
+        state.current_step = "elderly_activities"
+        return build_response(state, "我已查到目前可參加的長者文娛活動。", [])
 
     def handle_action(self, request: InteractionActionRequest) -> dict[str, Any]:
         if not isinstance(request, InteractionActionRequest):
@@ -293,6 +334,7 @@ class InteractionController:
     def _context(self, *, include_idempotency: bool) -> dict[str, str]:
         context = {
             "patient_id": self.patient_id,
+            "mock_user_id": self.mock_user_id,
             "authorization": self.authorization,
             "accept_language": "zh-TW",
             "request_id": _request_id(),

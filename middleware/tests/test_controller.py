@@ -22,6 +22,24 @@ class RecordingPipeline:
             return ToolExecutionResult(call.name, call.step_id, True, "REQ-4", {"data": {"task_id": "TASK-1"}, "task": {"id": "TASK-1"}}, None)
         if call.name == "medical.get_task_status":
             return ToolExecutionResult(call.name, call.step_id, True, "REQ-5", {"data": {"status": "SUBMITTED"}}, None)
+        if call.name == "one_account.get_cash_sharing_plan":
+            return ToolExecutionResult(
+                call.name,
+                call.step_id,
+                True,
+                "REQ-6",
+                {"data": {"plan_name": "現金分享計劃", "status": "ELIGIBLE"}},
+                None,
+            )
+        if call.name == "one_account.search_elderly_activities":
+            return ToolExecutionResult(
+                call.name,
+                call.step_id,
+                True,
+                "REQ-7",
+                {"data": [{"activity_id": "ACT-001", "title": "長者閱讀班"}]},
+                None,
+            )
         raise AssertionError(call.name)
 
 
@@ -42,6 +60,34 @@ class ControllerTests(unittest.TestCase):
             "medical.get_my_appointments",
             "medical.list_appointment_services",
         ])
+
+    def test_cash_sharing_message_calls_one_account_tool(self):
+        response = self.controller.handle_message(
+            InteractionRequest("S-CASH", "我想查現金分享計劃")
+        )
+        self.assertEqual(response["task_state"], "completed")
+        self.assertEqual(
+            [call.name for call in self.pipeline.calls],
+            ["one_account.get_cash_sharing_plan"],
+        )
+        self.assertEqual(
+            self.pipeline.calls[0].arguments["context"]["mock_user_id"],
+            "USR-DEMO-001",
+        )
+
+    def test_activity_message_calls_activity_search_tool(self):
+        response = self.controller.handle_message(
+            InteractionRequest("S-ACTIVITY", "我想找長者文娛活動")
+        )
+        self.assertEqual(response["task_state"], "completed")
+        self.assertEqual(
+            [event["tool_name"] for event in response["tool_events"]],
+            ["one_account.search_elderly_activities"],
+        )
+        self.assertEqual(
+            self.pipeline.calls[0].arguments["input"],
+            {"available_only": True},
+        )
 
     def test_controller_uses_injected_intent_recognizer(self):
         controller = InteractionController(

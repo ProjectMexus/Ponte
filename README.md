@@ -10,7 +10,7 @@ Ponte 是一個面向長者的公共服務入口與任務執行 Demo。使用者
 - Middleware 是前端唯一需要呼叫的 HTTP bridge，負責 interaction controller、session state 和 MCP process 管理。
 - MCP 轉接層以 stdio JSON-RPC 暴露固定的 21 個工具，將受控 tool call 轉為 mock backend HTTP request。
 - Mock backends 目前包含一戶通、醫療、社會福利及長者文娛活動 domain。
-- 目前前端自然語言端到端流程主要展示「查詢醫療預約」；其他 domain 可透過 MCP／API contract 和診斷接口測試。
+- 目前前端自然語言端到端流程支援「查詢醫療預約」、「查現金分享計劃」及「搜尋長者文娛活動」；其他 domain 可透過 MCP／API contract 和診斷接口測試。
 
 ## 架構
 
@@ -52,6 +52,16 @@ Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio serv
 ```
 
 成功時畫面會顯示 middleware 已連線、`selecting_service` 狀態，以及 `medical.get_my_appointments` 和 `medical.list_appointment_services` 兩個 tool events。按 `Ctrl-C` 會關閉整個 stack。
+
+也可以在前端輸入以下兩個只讀需求，直接測試 middleware → MCP → mock backend 的完整路徑：
+
+```text
+我想查現金分享計劃
+我想找長者文娛活動
+```
+
+前者會呼叫 `one_account.get_cash_sharing_plan`，後者會呼叫
+`one_account.search_elderly_activities`；回應資料會顯示在同一個服務工作區。
 
 需要保留 mock state 時，可指定資料目錄：
 

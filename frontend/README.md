@@ -31,6 +31,7 @@ http://127.0.0.1:15173/?middleware=http://127.0.0.1:18090
 - 支援 `SpeechRecognition` / `webkitSpeechRecognition` 時，以 `zh-HK` 取得粵語 transcript；transcript 會先回填文字框，使用者按送出後才傳給 middleware。
 - 支援 `speechSynthesis` 時朗讀助手回覆，並提供停止朗讀控制。
 - Middleware 返回的 task steps、tool events、服務資料、選項和確認操作會在畫面上顯示。
+- 可用文字輸入測試三個自然語言 workflow：`我想查詢醫療預約`、`我想查現金分享計劃`、`我想找長者文娛活動`。後兩者是只讀查詢，會分別展示 `one_account.get_cash_sharing_plan` 和 `one_account.search_elderly_activities` 的結果。
 - middleware 連線錯誤不會清空既有對話或停用文字輸入。
 
 ## 驗證
@@ -43,4 +44,4 @@ node --check frontend/interaction-view.js
 node --check frontend/speech.js
 ```
 
-完整驗收流程請參考 repo 根目錄的 `README.md`：輸入「我想查詢醫療預約」並送出，畫面應顯示 middleware 已連線、`selecting_service`，以及兩個由 MCP 回傳的 medical tool events。
+完整驗收流程請參考 repo 根目錄的 `README.md`：輸入上述任一需求並送出，畫面應顯示 middleware 已連線、對應 task state，以及由 MCP 回傳的 tool event。
