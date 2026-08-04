@@ -163,6 +163,8 @@ Intent Recognition 預設使用 keyword recognizer。若設定 `PONTE_LLM_API_UR
 
 middleware 會以設定值覆蓋 authorization、patient、language 和 request ID，再透過 MCP stdio 傳給受控 adapter；client 不能注入任意 backend headers。MCP 或 backend error 會以 `ok: false` 安全返回，malformed request、unknown tool 和 invalid arguments 則回 HTTP 400。
 
+前端文字輸入也支援 MCP 診斷命令，例如 `mcp medical.list_departments {}`。該命令會走 `/api/interactions/message`，回應會附上 `mode=mcp_diagnostic`、registry 的 HTTP contract、tool event 和 backend response。診斷 POST tool 必須透過 `confirm_tool` action 確認；低階 `/api/mcp/tools/call` 只允許 GET tool，避免繞過確認流程。
+
 ## CORS 與前端
 
 前端預設在 `http://127.0.0.1:5173` 啟動。若前端使用其他 origin，設定 `PONTE_FRONTEND_ORIGINS` 的逗號分隔 allowlist；middleware 會提供 `OPTIONS` preflight、`Content-Type` allow header，以及固定的 GET/POST methods。

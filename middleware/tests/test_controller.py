@@ -40,6 +40,24 @@ class RecordingPipeline:
                 {"data": [{"activity_id": "ACT-001", "title": "長者閱讀班"}]},
                 None,
             )
+        if call.name == "medical.list_departments":
+            return ToolExecutionResult(
+                call.name,
+                call.step_id,
+                True,
+                "REQ-8",
+                {"data": {"departments": [{"id": "DEP-CARD", "name": "心臟科"}]}},
+                None,
+            )
+        if call.name == "one_account.book_government_service_center_queue":
+            return ToolExecutionResult(
+                call.name,
+                call.step_id,
+                True,
+                "REQ-9",
+                {"data": {"ticket": {"ticket_id": "Q-GSC-001"}}},
+                None,
+            )
         raise AssertionError(call.name)
 
 
@@ -88,6 +106,57 @@ class ControllerTests(unittest.TestCase):
             self.pipeline.calls[0].arguments["input"],
             {"available_only": True},
         )
+
+    def test_diagnostic_get_returns_contract_and_backend_data(self):
+        response = self.controller.handle_message(
+            InteractionRequest(
+                "S-DIAG-1",
+                'mcp medical.list_departments {"keyword":"心臟"}',
+            )
+        )
+        self.assertEqual(response["mode"], "mcp_diagnostic")
+        self.assertEqual(response["task_state"], "completed")
+        self.assertEqual(response["data"]["diagnostic"]["http_method"], "GET")
+        self.assertEqual(
+            response["data"]["diagnostic"]["path"],
+            "/mock/medical/v1/departments",
+        )
+        self.assertEqual(response["tool_events"][0]["tool_name"], "medical.list_departments")
+        self.assertEqual(
+            response["data"]["backend_response"]["data"]["departments"][0]["id"],
+            "DEP-CARD",
+        )
+
+    def test_diagnostic_post_requires_confirmation_and_confirm_dispatches(self):
+        pending = self.controller.handle_message(
+            InteractionRequest(
+                "S-DIAG-2",
+                'mcp one_account.book_government_service_center_queue '
+                '{"service_center_id":"GSC-MAIN",'
+                '"service_type":"general_counter","requested_date":"2026-08-20",'
+                '"confirmation":{"confirmation_id":"DEMO-CONF"}}',
+            )
+        )
+        self.assertEqual(pending["task_state"], "awaiting_confirmation")
+        self.assertEqual(pending["tool_events"], [])
+        self.assertEqual(pending["actions"][0]["kind"], "confirm_tool")
+        self.assertFalse(any(call.name.startswith("one_account.book_") for call in self.pipeline.calls))
+
+        confirmed = self.controller.handle_action(
+            InteractionActionRequest("S-DIAG-2", "confirm_tool", {"ignored": "value"})
+        )
+        self.assertEqual(confirmed["task_state"], "completed")
+        self.assertEqual(
+            [call.name for call in self.pipeline.calls],
+            ["one_account.book_government_service_center_queue"],
+        )
+        self.assertEqual(
+            confirmed["data"]["backend_response"]["data"]["ticket"]["ticket_id"],
+            "Q-GSC-001",
+        )
+        call_context = self.pipeline.calls[0].arguments["context"]
+        self.assertEqual(call_context["mock_user_id"], "USR-DEMO-001")
+        self.assertTrue(call_context["idempotency_key"].startswith("IDEMP-MW-"))
 
     def test_controller_uses_injected_intent_recognizer(self):
         controller = InteractionController(

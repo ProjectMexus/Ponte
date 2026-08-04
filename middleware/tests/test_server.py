@@ -59,6 +59,70 @@ class ServerTests(unittest.TestCase):
         self.application.close()
         self.assertTrue(self.mcp_client.closed)
 
+    def test_diagnostic_read_message_returns_contract_and_tool_event(self):
+        status, payload = self.request("POST", "/api/interactions/message", {
+            "session_id": "S-SERVER-DIAG-GET",
+            "message": "mcp medical.list_departments {}",
+            "source": "text",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["mode"], "mcp_diagnostic")
+        self.assertEqual(payload["data"]["diagnostic"]["http_method"], "GET")
+        self.assertEqual(payload["tool_events"][0]["tool_name"], "medical.list_departments")
+
+    def test_diagnostic_post_requires_confirm_action(self):
+        status, payload = self.request("POST", "/api/interactions/message", {
+            "session_id": "S-SERVER-DIAG-POST",
+            "message": (
+                'mcp one_account.book_government_service_center_queue '
+                '{"service_center_id":"GSC-MAIN",'
+                '"service_type":"general_counter","requested_date":"2026-08-20",'
+                '"confirmation":{"confirmation_id":"DEMO-CONF"}}'
+            ),
+            "source": "text",
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["task_state"], "awaiting_confirmation")
+        self.assertEqual(payload["tool_events"], [])
+        self.assertEqual(payload["actions"][0]["kind"], "confirm_tool")
+
+        status, confirmed = self.request("POST", "/api/interactions/action", {
+            "session_id": "S-SERVER-DIAG-POST",
+            "action": "confirm_tool",
+            "payload": {"tool_name": "medical.list_departments"},
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(confirmed["task_state"], "completed")
+        self.assertEqual(
+            confirmed["tool_events"][0]["tool_name"],
+            "one_account.book_government_service_center_queue",
+        )
+
+    def test_low_level_non_get_tool_call_requires_confirmation(self):
+        with self.assertRaises(HTTPError) as raised:
+            self.request("POST", "/api/mcp/tools/call", {
+                "name": "one_account.book_government_service_center_queue",
+                "arguments": {"context": {}, "input": {}},
+            })
+        self.assertEqual(raised.exception.code, 400)
+        self.assertEqual(
+            json.loads(raised.exception.read())["error"]["code"],
+            "CONFIRMATION_REQUIRED",
+        )
+
+    def test_malformed_diagnostic_command_is_client_error(self):
+        with self.assertRaises(HTTPError) as raised:
+            self.request("POST", "/api/interactions/message", {
+                "session_id": "S-SERVER-DIAG-BAD",
+                "message": "mcp medical.list_departments {",
+                "source": "text",
+            })
+        self.assertEqual(raised.exception.code, 400)
+        self.assertEqual(
+            json.loads(raised.exception.read())["error"]["code"],
+            "INVALID_DIAGNOSTIC_COMMAND",
+        )
+
     def test_message_workflow_passes_mock_user_id_to_mcp_context(self):
         status, payload = self.request("POST", "/api/interactions/message", {
             "session_id": "S-SERVER-CASH",

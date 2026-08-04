@@ -42,6 +42,21 @@ class FrontendStaticTests(unittest.TestCase):
             self.assertIn(token, html)
         self.assertIn('lang="zh-Hant"', html)
 
+    def test_index_advertises_mcp_diagnostic_command(self):
+        html = Path("frontend/index.html").read_text(encoding="utf-8")
+        self.assertIn("mcp medical.list_departments {}", html)
+
+    def test_frontend_supports_diagnostic_confirmation_action(self):
+        self.assertIn(
+            "confirm_tool",
+            Path("frontend/README.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn("sendAction", Path("frontend/app.js").read_text(encoding="utf-8"))
+        self.assertIn(
+            "action.kind || action.id",
+            Path("frontend/interaction-view.js").read_text(encoding="utf-8"),
+        )
+
     def test_styles_define_large_controls_and_focus(self):
         css = Path("frontend/styles.css").read_text(encoding="utf-8")
         self.assertRegex(css, r"font-size:\s*20px")

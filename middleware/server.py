@@ -15,6 +15,7 @@ from MCP.registry import build_registry
 from .contracts import InteractionActionRequest, InteractionRequest, ToolCall, ToolExecutionResult
 from .config import load_dotenv
 from .controller import InteractionController
+from .diagnostics import DiagnosticCommandError
 from .execution import ExecutionPipeline, McpExecutionStage
 from .mcp_client import McpStdioClient
 from .session import SessionStore
@@ -61,6 +62,7 @@ class MiddlewareApplication:
             patient_id,
             authorization,
             mock_user_id=mock_user_id,
+            registry=self.registry,
         )
 
     def close(self) -> None:
@@ -238,7 +240,10 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
                     request = InteractionRequest.from_json(body)
                 except ValueError as error:
                     raise ClientRequestError(400, "INVALID_REQUEST", str(error)) from error
-                return application.controller.handle_message(request)
+                try:
+                    return application.controller.handle_message(request)
+                except DiagnosticCommandError as error:
+                    raise ClientRequestError(400, error.code, error.message) from error
             if path == "/api/interactions/action":
                 try:
                     request = InteractionActionRequest.from_json(body)
@@ -256,11 +261,11 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
             if not isinstance(name, str) or not name.strip():
                 raise ClientRequestError(400, "INVALID_TOOL_REQUEST", "name 必須是非空字串。")
             try:
-                application.registry.get(name)
+                definition = application.registry.get(name)
             except KeyError as error:
                 raise ClientRequestError(400, "UNKNOWN_TOOL", "Tool 不在固定 registry 內。") from error
-            if name == "medical.create_appointment":
-                raise ClientRequestError(400, "CONFIRMATION_REQUIRED", "medical.create_appointment 必須經由 confirm action。")
+            if definition.method.upper() != "GET":
+                raise ClientRequestError(400, "CONFIRMATION_REQUIRED", "此 tool 必須經由前端確認 action。")
             if not isinstance(arguments, dict):
                 raise ClientRequestError(400, "INVALID_TOOL_REQUEST", "arguments 必須是 JSON object。")
             safe_arguments = _safe_tool_arguments(arguments, application)

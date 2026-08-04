@@ -8,13 +8,28 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
 
+from MCP.registry import ToolRegistry, build_registry
+
 from .contracts import InteractionActionRequest, InteractionRequest, ToolCall, ToolExecutionResult
+from .diagnostics import (
+    DiagnosticCommand,
+    describe_diagnostic_command,
+    diagnostic_requires_confirmation,
+)
 from .execution import ExecutionPipeline
 from .intent import IntentRecognizer, KeywordIntentRecognizer, build_intent_recognizer
 from .session import SessionState, SessionStore, build_response
 
 
-_ACTION_NAMES = frozenset({"search_slots", "select_slot", "confirm", "cancel", "retry", "human_help"})
+_ACTION_NAMES = frozenset({
+    "search_slots",
+    "select_slot",
+    "confirm",
+    "confirm_tool",
+    "cancel",
+    "retry",
+    "human_help",
+})
 _MISSING = object()
 
 
@@ -30,12 +45,14 @@ class InteractionController:
         intent_recognizer: IntentRecognizer | None = None,
         *,
         mock_user_id: str = "USR-DEMO-001",
+        registry: ToolRegistry | None = None,
     ) -> None:
         self.pipeline = pipeline
         self.sessions = sessions
         self.patient_id = _required_string(patient_id, "patient_id")
         self.authorization = _required_string(authorization, "authorization")
         self.mock_user_id = _required_string(mock_user_id, "mock_user_id")
+        self.registry = registry or build_registry()
         self.intent_recognizer = intent_recognizer or build_intent_recognizer()
 
     def handle_message(self, request: InteractionRequest) -> dict[str, Any]:
@@ -43,6 +60,11 @@ class InteractionController:
             raise ValueError("request must be an InteractionRequest")
         state = self.sessions.get_or_create(request.session_id)
         state.last_error = None
+        state.data.pop("pending_diagnostic", None)
+
+        diagnostic = DiagnosticCommand.parse(request.message)
+        if diagnostic is not None:
+            return self._handle_diagnostic_message(state, diagnostic)
 
         intent = self.intent_recognizer.recognize(request.message)
         state.data["intent"] = intent.intent
@@ -136,6 +158,8 @@ class InteractionController:
         state = self.sessions.get_or_create(request.session_id)
         state.last_error = None
         action = request.action
+        if action == "confirm_tool":
+            return self._confirm_diagnostic(state)
         if action == "search_slots":
             return self._search_slots(state, request.payload)
         if action == "select_slot":
@@ -143,6 +167,8 @@ class InteractionController:
         if action == "confirm":
             return self._confirm(state, request.payload)
         if action == "cancel":
+            if state.data.get("pending_diagnostic") is not None:
+                return self._cancel_diagnostic(state)
             state.task_state = "cancelled"
             state.current_step = "cancel"
             state.confirmation_record = None
@@ -153,6 +179,94 @@ class InteractionController:
         state.task_state = "human_handoff"
         state.current_step = "human_help"
         return build_response(state, "我會為你轉接人工協助。", [])
+
+    def _handle_diagnostic_message(
+        self,
+        state: SessionState,
+        command: DiagnosticCommand,
+    ) -> dict[str, Any]:
+        descriptor = describe_diagnostic_command(self.registry, command)
+        state.data.pop("backend_response", None)
+        state.data["diagnostic"] = deepcopy(descriptor)
+        if diagnostic_requires_confirmation(self.registry, command):
+            state.data["pending_diagnostic"] = {
+                "tool_name": command.tool_name,
+                "input": deepcopy(command.input_data),
+                "diagnostic": deepcopy(descriptor),
+            }
+            state.task_state = "awaiting_confirmation"
+            state.current_step = "confirm_tool"
+            return self._diagnostic_response(
+                state,
+                "這個 MCP tool 會修改測試資料，請確認後才會執行。",
+                [
+                    {"kind": "confirm_tool", "label": "確認執行此 API"},
+                    {"kind": "cancel", "label": "取消"},
+                ],
+            )
+
+        step_id = _diagnostic_step_id(command.tool_name)
+        result = self._run_tool(
+            state,
+            command.tool_name,
+            step_id,
+            command.input_data,
+        )
+        state.data["backend_response"] = _diagnostic_backend_response(result)
+        if result.ok:
+            state.task_state = "completed"
+            state.current_step = step_id
+            message = "已完成 MCP tool 測試，以下是 backend 回應。"
+        else:
+            message = "MCP tool 測試未成功，請檢查以下錯誤資料。"
+        return self._diagnostic_response(state, message, [])
+
+    def _confirm_diagnostic(self, state: SessionState) -> dict[str, Any]:
+        pending = state.data.pop("pending_diagnostic", None)
+        if not isinstance(pending, Mapping):
+            raise ValueError("confirm_tool requires a pending diagnostic command")
+        name = pending.get("tool_name")
+        input_data = pending.get("input")
+        if not isinstance(name, str) or not isinstance(input_data, Mapping):
+            raise ValueError("pending diagnostic command is invalid")
+
+        command = DiagnosticCommand(name, dict(input_data))
+        descriptor = describe_diagnostic_command(self.registry, command)
+        state.data["diagnostic"] = deepcopy(descriptor)
+        step_id = _diagnostic_step_id(command.tool_name)
+        state.task_state = "querying"
+        result = self._run_tool(
+            state,
+            command.tool_name,
+            step_id,
+            command.input_data,
+            safe_for_retry=False,
+            include_idempotency=True,
+        )
+        state.data["backend_response"] = _diagnostic_backend_response(result)
+        if result.ok:
+            state.task_state = "completed"
+            state.current_step = step_id
+            message = "已確認並完成 MCP tool 測試，以下是 backend 回應。"
+        else:
+            message = "已確認執行，但 MCP tool 未成功。"
+        return self._diagnostic_response(state, message, [])
+
+    def _cancel_diagnostic(self, state: SessionState) -> dict[str, Any]:
+        state.data.pop("pending_diagnostic", None)
+        state.task_state = "cancelled"
+        state.current_step = "cancel_diagnostic"
+        return self._diagnostic_response(state, "已取消這次 MCP tool 測試。", [])
+
+    @staticmethod
+    def _diagnostic_response(
+        state: SessionState,
+        assistant_message: str,
+        actions: list[Mapping[str, Any]],
+    ) -> dict[str, Any]:
+        response = build_response(state, assistant_message, actions)
+        response["mode"] = "mcp_diagnostic"
+        return response
 
     def _search_slots(self, state: SessionState, payload: Mapping[str, Any]) -> dict[str, Any]:
         service_id = _payload_string(payload, "service_id")
@@ -331,6 +445,7 @@ class InteractionController:
             )
         return result
 
+
     def _context(self, *, include_idempotency: bool) -> dict[str, str]:
         context = {
             "patient_id": self.patient_id,
@@ -423,6 +538,19 @@ def _is_medical_intent(message: str) -> bool:
 
 def _request_id() -> str:
     return f"REQ-MW-{uuid.uuid4().hex[:12].upper()}"
+
+
+def _diagnostic_step_id(tool_name: str) -> str:
+    return f"diagnostic_{tool_name.replace('.', '_')}"
+
+
+def _diagnostic_backend_response(result: ToolExecutionResult) -> dict[str, Any]:
+    if result.data is not None:
+        return deepcopy(dict(result.data))
+    return {
+        "request_id": result.request_id,
+        "error": deepcopy(dict(result.error or {})),
+    }
 
 
 def _task_state(status: str) -> str:

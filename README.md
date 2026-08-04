@@ -63,6 +63,16 @@ Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio serv
 前者會呼叫 `one_account.get_cash_sharing_plan`，後者會呼叫
 `one_account.search_elderly_activities`；回應資料會顯示在同一個服務工作區。
 
+若要逐一測試固定 registry 的 MCP tools，可在同一個文字框輸入：
+
+```text
+mcp medical.list_departments {}
+mcp one_account.get_cash_sharing_plan {"year":2026}
+mcp one_account.search_elderly_activities {"available_only":true}
+```
+
+這些命令仍然只經由 middleware；middleware 會重新驗證 tool 和 input，再讓真實 MCP stdio server 呼叫 mock backend。GET tool 會立即執行，POST tool 必須按確認後才會發送。
+
 需要保留 mock state 時，可指定資料目錄：
 
 ```bash

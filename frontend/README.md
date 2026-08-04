@@ -32,6 +32,7 @@ http://127.0.0.1:15173/?middleware=http://127.0.0.1:18090
 - 支援 `speechSynthesis` 時朗讀助手回覆，並提供停止朗讀控制。
 - Middleware 返回的 task steps、tool events、服務資料、選項和確認操作會在畫面上顯示。
 - 可用文字輸入測試三個自然語言 workflow：`我想查詢醫療預約`、`我想查現金分享計劃`、`我想找長者文娛活動`。後兩者是只讀查詢，會分別展示 `one_account.get_cash_sharing_plan` 和 `one_account.search_elderly_activities` 的結果。
+- 可用相同文字輸入測試固定 MCP tool：`mcp <tool-name> <JSON input>`，例如 `mcp medical.list_departments {}`。畫面會展示 tool event、HTTP contract 和 backend JSON；POST tool 會先顯示 `confirm_tool` 確認操作，未確認前不會改變 mock state。
 - middleware 連線錯誤不會清空既有對話或停用文字輸入。
 
 ## 驗證
