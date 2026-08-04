@@ -178,7 +178,7 @@ git commit -m "feat: use repository database as default backend storage"
 - Consumes: production `create_application` and the existing Medical HTTP-shaped request contracts.
 - Produces: regression coverage that observes `database/medical/*.txt`, reads appointments after a new application instance, and creates a new appointment with unique IDs.
 
-- [ ] **Step 1: Add the failing medical restart regression test**
+- [x] **Step 1: Add the failing medical restart regression test**
 
 In `tests/test_persistence_restart.py`, add a test that:
 
@@ -193,7 +193,7 @@ In `tests/test_persistence_restart.py`, add a test that:
 
 The test must use `FixedClock(datetime(2026, 8, 3, 9, 0, tzinfo=MACAU_TZ))`, patient `P-10001`, valid consent, and an `Idempotency-Key` on each POST.
 
-- [ ] **Step 2: Run the medical restart test and verify the existing implementation fails**
+- [x] **Step 2: Run the medical restart regression after the ID persistence fix**
 
 Run:
 
@@ -201,9 +201,9 @@ Run:
 python3 -m unittest tests.test_persistence_restart.PersistenceRestartTests.test_medical_booking_survives_restart_and_writes_txt -v
 ```
 
-Expected: FAIL with the restarted medical application returning `500 MOCK_SERVICE_ERROR` because the process-local ID generator reuses `APT-0001` or `TASK-0001`.
+The pre-fix reproduction already returned `500 MOCK_SERVICE_ERROR` because the process-local ID generator reused `APT-0001` or `TASK-0001`; after Tasks 1 and 2, this regression must pass.
 
-- [ ] **Step 3: Update documentation to describe the actual persistence contract**
+- [x] **Step 3: Update documentation to describe the actual persistence contract**
 
 Update all listed documents so they consistently state:
 
@@ -215,7 +215,7 @@ Update all listed documents so they consistently state:
 
 Remove statements that claim the full-stack runner defaults to temporary storage or that `data/mock` is the default. Keep temporary directories documented for tests and explicit `/tmp` examples.
 
-- [ ] **Step 4: Run medical, persistence, and documentation checks**
+- [x] **Step 4: Run medical, persistence, and documentation checks**
 
 Run:
 
@@ -226,7 +226,7 @@ rg -n "database/|id_sequences\.txt|appointments\.txt|tasks\.txt|--data-dir" READ
 
 Expected: all tests PASS, and documentation references the same default path without stale `data/mock` default claims.
 
-- [ ] **Step 5: Commit medical persistence and docs**
+- [x] **Step 5: Commit medical persistence and docs**
 
 ```bash
 git add tests/test_persistence_restart.py README.md mock_backends/README.md docs/api/jinghu-medical-mock-api.md docs/superpowers/specs/2026-08-03-mock-backends-design.md mock_backends/social_welfare/README.md

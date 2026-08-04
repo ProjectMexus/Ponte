@@ -11,8 +11,7 @@
 ```bash
 python3 -m mock_backends.server \
   --host 127.0.0.1 \
-  --port 8080 \
-  --data-dir data/mock
+  --port 8080
 ```
 
 server 會在同一個 process mount 以下 domain：
@@ -22,7 +21,7 @@ server 會在同一個 process mount 以下 domain：
 - Medical：`/mock/medical/v1`
 - Social Welfare referrals：`/mock/social-welfare`
 
-參數預設值為 `127.0.0.1:8080` 和 `data/mock`；可用 `--host`、`--port` 及 `--data-dir` 覆寫。若只想以 temporary directory 啟動：
+參數預設值為 `127.0.0.1:8080` 和 repository root 下的 `database/`；可用 `--host`、`--port` 及 `--data-dir` 覆寫。若只想以 temporary directory 啟動：
 
 ```bash
 python3 -m mock_backends.server \
@@ -80,7 +79,8 @@ mock_backends/
 使用 `--data-dir` 指定資料根目錄。建立的 mock state 會以 JSON Lines 格式保存於 `.txt` 文件：
 
 ```text
-data/mock/
+database/
+├── id_sequences.txt
 ├── one_account/
 │   ├── applications.txt
 │   ├── queue_tickets.txt
@@ -97,7 +97,7 @@ data/mock/
     └── activity_idempotency.txt
 ```
 
-這是 Demo 的簡化持久化媒介，不適合生產環境；更換為 SQL 或真正外部 API 時，只需替換 repository／client wiring，domain service 和 MCP tool contract 可以保留。完整 stack runner 預設使用 temporary data directory，退出時會清理；需要保留資料時請在根目錄使用 `python3 scripts/run_stack.py --data-dir data/mock`。
+這是 Demo 的簡化持久化媒介，不適合生產環境；更換為 SQL 或真正外部 API 時，只需替換 repository／client wiring，domain service 和 MCP tool contract 可以保留。完整 stack runner 和 standalone backend 預設都使用 repository root 下的 `database/`；可用 `--data-dir /tmp/ponte-mock-data` 明確指定 temporary directory。`id_sequences.txt` 保存跨重啟仍有效的 readable mock ID counters。
 
 ## 測試
 
@@ -124,7 +124,7 @@ python3 -m unittest \
   -v
 ```
 
-HTTP smoke tests 會啟動 localhost socket；在受限環境中需要允許本地測試 socket。測試使用 temporary directory，不會寫入正式的 `data/mock`。
+HTTP smoke tests 會啟動 localhost socket；在受限環境中需要允許本地測試 socket。測試使用 temporary directory，不會寫入正式的 `database/`。
 
 ## 邊界
 

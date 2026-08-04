@@ -47,7 +47,7 @@ cp .env.example .env
 python3 scripts/run_stack.py
 ```
 
-Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio server 及 frontend，並使用 temporary data directory。看到 `Ponte stack is ready.` 後，開啟它列出的 Frontend URL，輸入以下唯讀查詢：
+Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio server 及 frontend，並預設把 mock state 寫入 repository root 下、與 `mock_backends/` 同級的 `database/`。看到 `Ponte stack is ready.` 後，開啟它列出的 Frontend URL，輸入以下唯讀查詢：
 
 ```text
 我想查詢自己的醫療預約
@@ -83,11 +83,13 @@ mcp one_account.search_elderly_activities {"available_only":true}
 
 這些命令仍然只經由 middleware；middleware 會重新驗證 tool 和 input，再讓真實 MCP stdio server 呼叫 mock backend。GET tool 會立即執行，POST tool 必須按確認後才會發送。
 
-需要保留 mock state 時，可指定資料目錄：
+需要使用其他資料根目錄時，可指定 `--data-dir` 覆寫預設的 `database/`：
 
 ```bash
-python3 scripts/run_stack.py --data-dir data/mock
+python3 scripts/run_stack.py --data-dir /tmp/ponte-mock-data
 ```
+
+建立操作會以 JSON Lines 格式寫入 `database/**/*.txt`；medical 預約位於 `database/medical/appointments.txt`，Task 位於 `database/medical/tasks.txt`，而 `database/id_sequences.txt` 保存可重啟的 mock ID sequence。`database/` 只保存本機 mock state，`.txt` 內容不會提交到 repository。
 
 ### Terminal logging
 
@@ -169,6 +171,7 @@ Ponte/
 ├── middleware/           Interaction Controller、session、execution pipeline
 ├── MCP/                  MCP stdio server、tool registry、REST adapter
 ├── mock_backends/        一戶通、醫療、社福 mock domain services
+├── database/              預設的 JSON Lines .txt mock state
 ├── scripts/run_stack.py  一次啟動完整本地 Demo
 ├── tests/                跨模組及 full-stack 測試
 └── docs/                 架構、產品、API、spec 及 implementation plans

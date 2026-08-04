@@ -14,4 +14,4 @@
 
 它只模擬服務目錄、資料共享同意、轉介建立、社工接手及狀態查詢。所有資料都是 mock；不會發送真實通知，也不會聯絡真實社工。建立轉介要求 `X-Mock-User-Id`、`Idempotency-Key`、`consents.data_sharing=true` 和 Workflow confirmation。
 
-長者活動由同一 domain 下獨立的 `ElderlyActivitiesService` 處理；日後的 MCP adapter 應調用對應 service 的方法，不應直接讀寫 `data/mock/social_welfare/*.txt`。
+長者活動由同一 domain 下獨立的 `ElderlyActivitiesService` 處理；日後的 MCP adapter 應調用對應 service 的方法，不應直接讀寫 `database/social_welfare/*.txt`。

@@ -86,17 +86,18 @@ HTTP adapter 只負責路由、headers、JSON 解碼、HTTP status 和 envelope�
 - `Clock.now() -> datetime`：預設使用 Asia/Macau mock clock，也可在測試中注入固定時間。
 - `TextRepository`：以 JSON Lines 格式讀寫 `.txt` 文件，提供 `list`, `get`, `insert`, `replace` 和 `find`，實作以原子替換和程序內 lock 保護簡單並發寫入。
 - `IdempotencyRepository`：按 user context、endpoint、key 保存 request body fingerprint 和第一次結果；同 key 同 body 重放原結果，不同 body 返回 `IDEMPOTENCY_KEY_REUSED`。
-- `IdGenerator`：為 application、ticket、registration、referral、task 和 receipt 產生可讀 mock ID。
+- `IdGenerator`：為 application、ticket、registration、referral、task 和 receipt 產生可讀 mock ID；production wiring 以 `.txt` sequence repository 保留 counters。
 - `DomainError`：攜帶 HTTP status、error code、message、details、retryable，由 HTTP 層轉成統一錯誤 envelope。
 
 Domain service 以 constructor injection 接收 repositories、clock 和 ID generator；日後可用 SQL repository、真實 API client 或 MCP adapter 替換，不需要改動 domain service 的輸入輸出模型。
 
 ### Persistence layout
 
-預設資料根目錄為 `data/mock/`，按 domain 分隔：
+預設資料根目錄為 repository root 下、與 `mock_backends/` 同級的 `database/`，按 domain 分隔：
 
 ```text
-data/mock/
+database/
+├── id_sequences.txt
 ├── one_account/
 │   ├── applications.txt
 │   ├── queue_tickets.txt
@@ -113,7 +114,7 @@ data/mock/
     └── activity_idempotency.txt
 ```
 
-Fixture、科室、活動和服務目錄屬於程式碼內的只讀 demo data；使用者建立的狀態才寫入上述 `.txt` 文件。啟動參數可覆寫資料根目錄，測試使用 temporary directory。
+Fixture、科室、活動和服務目錄屬於程式碼內的只讀 demo data；使用者建立的狀態及 readable ID counters 才寫入上述 `.txt` 文件。啟動參數可覆寫資料根目錄，測試使用 temporary directory。
 
 ## HTTP 啟動與 MCP 對接
 

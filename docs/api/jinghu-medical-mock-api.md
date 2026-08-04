@@ -63,6 +63,21 @@ http://localhost:8080/mock/medical/v1
 5. 掛號和預約成功後，API 返回 `Appointment` 及對應的 `Task` 摘要，供 Workflow Orchestrator 產生事件及 Action Receipt。
 6. `visit_reason` 和 `notes` 只接受非臨床的行政備註；不得填寫診斷、處方或醫療判斷。
 
+### 2.5 Demo 持久化
+
+Ponte mock backend 預設使用 repository root 下、與 `mock_backends/` 同級的 `database/` 作為資料根目錄。Medical 建立操作會以 JSON Lines 格式寫入：
+
+```text
+database/
+├── id_sequences.txt
+└── medical/
+    ├── appointments.txt
+    ├── tasks.txt
+    └── idempotency.txt
+```
+
+`appointments.txt` 和 `tasks.txt` 保存建立後的 mock state，`idempotency.txt` 保存 POST 重試所需的第一次 response，`id_sequences.txt` 保存跨 backend 重啟仍不重複的 readable mock ID。這些文件只包含本地 demo 資料，不是真實病歷或醫院資料；可用 backend 的 `--data-dir` 或完整 stack runner 的 `--data-dir` 覆寫資料根目錄。
+
 ## 3. 資源模型
 
 ### 3.1 Department
