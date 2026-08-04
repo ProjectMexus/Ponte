@@ -71,8 +71,22 @@ class ControllerTests(unittest.TestCase):
         self.pipeline = RecordingPipeline()
         self.controller = InteractionController(self.pipeline, SessionStore(), "PAT-DEMO-001", "Bearer mock-user-token")
 
-    def test_medical_message_loads_appointments_and_services(self):
-        response = self.controller.handle_message(InteractionRequest("S-1", "我想查詢醫療預約"))
+    def test_medical_query_loads_only_my_appointments(self):
+        response = self.controller.handle_message(
+            InteractionRequest("S-QUERY", "我想查詢自己的醫療預約")
+        )
+        self.assertEqual(response["task_state"], "completed")
+        self.assertEqual(response["current_step"], "load_appointments")
+        self.assertEqual(response["data"]["appointments"], [])
+        self.assertEqual(
+            [call.name for call in self.pipeline.calls],
+            ["medical.get_my_appointments"],
+        )
+
+    def test_medical_booking_loads_appointments_and_services(self):
+        response = self.controller.handle_message(
+            InteractionRequest("S-BOOKING", "我想預約醫療服務")
+        )
         self.assertEqual(response["task_state"], "selecting_service")
         self.assertEqual([call.name for call in self.pipeline.calls], [
             "medical.get_my_appointments",

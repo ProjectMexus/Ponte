@@ -73,6 +73,10 @@ class InteractionController:
             return self._handle_cash_sharing(state)
         if intent.is_elderly_activity:
             return self._handle_elderly_activity(state)
+        if intent.is_medical_query:
+            return self._handle_medical_query(state)
+        if intent.is_medical_booking:
+            return self._handle_medical_booking(state)
         if not intent.is_medical:
             state.task_state = "idle"
             state.current_step = "welcome"
@@ -82,6 +86,25 @@ class InteractionController:
                 [{"action": "human_help", "label": "轉接人工協助"}],
             )
 
+    def _handle_medical_query(self, state: SessionState) -> dict[str, Any]:
+        state.task_state = "querying"
+        state.current_step = "load_appointments"
+        appointments_result = self._run_tool(
+            state,
+            "medical.get_my_appointments",
+            "load_appointments",
+            {},
+        )
+        appointments = self._result_data(state, appointments_result, "load_appointments")
+        if appointments is None:
+            return build_response(state, "暫時無法查詢你的醫療預約，請稍後再試。", [])
+        state.data["appointments"] = appointments
+        state.task_state = "completed"
+        state.current_step = "load_appointments"
+        state.confirmation_record = None
+        return build_response(state, "我已查到你目前的醫療預約。", [])
+
+    def _handle_medical_booking(self, state: SessionState) -> dict[str, Any]:
         state.task_state = "querying"
         state.current_step = "load_appointments"
         appointments_result = self._run_tool(

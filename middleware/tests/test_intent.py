@@ -1,3 +1,4 @@
+import json
 import unittest
 from unittest.mock import patch
 
@@ -21,8 +22,19 @@ class IntentTests(unittest.TestCase):
         medical = recognizer.recognize("我想改期睇醫生")
         general = recognizer.recognize("你好")
         self.assertTrue(medical.is_medical)
+        self.assertTrue(medical.is_medical_booking)
         self.assertEqual(medical.source, "keyword")
         self.assertFalse(general.is_medical)
+
+    def test_keyword_recognizer_separates_my_appointments_from_booking(self):
+        recognizer = KeywordIntentRecognizer()
+        query = recognizer.recognize("我想查詢自己的醫療預約")
+        booking = recognizer.recognize("我想預約醫療服務")
+        slots = recognizer.recognize("我想查詢可預約時段")
+        self.assertTrue(query.is_medical_query)
+        self.assertFalse(query.is_medical_booking)
+        self.assertTrue(booking.is_medical_booking)
+        self.assertTrue(slots.is_medical_booking)
 
     def test_keyword_recognizer_matches_cash_sharing_and_activity_terms(self):
         recognizer = KeywordIntentRecognizer()
@@ -61,13 +73,26 @@ class IntentTests(unittest.TestCase):
         with self.assertRaises(IntentRecognitionError):
             LlmIntentRecognizer._parse_response({"intent": "passport_renewal"})
 
+    def test_llm_recognizer_parses_both_medical_intents(self):
+        for expected, message in (
+            ("medical_query", "查詢自己的預約"),
+            ("medical_booking", "預約檢查服務"),
+        ):
+            recognizer = LlmIntentRecognizer(
+                "https://llm.example.test/v1/chat/completions",
+                transport=lambda request, timeout, value=expected: {
+                    "choices": [{"message": {"content": json.dumps({"intent": value})}}]
+                },
+            )
+            self.assertEqual(recognizer.recognize(message).intent, expected)
+
     def test_hybrid_recognizer_falls_back_when_llm_fails(self):
         class FailingRecognizer(IntentRecognizer):
             def recognize(self, message):
                 raise IntentRecognitionError("temporary failure")
 
-        decision = HybridIntentRecognizer(llm=FailingRecognizer()).recognize("我想查醫療預約")
-        self.assertTrue(decision.is_medical)
+        decision = HybridIntentRecognizer(llm=FailingRecognizer()).recognize("我想查詢自己的醫療預約")
+        self.assertTrue(decision.is_medical_query)
         self.assertEqual(decision.source, "keyword")
 
     def test_default_builder_uses_keywords_without_llm_url(self):

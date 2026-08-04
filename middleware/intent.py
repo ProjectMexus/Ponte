@@ -13,7 +13,8 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 
 IntentName = Literal[
-    "medical_appointment",
+    "medical_query",
+    "medical_booking",
     "cash_sharing",
     "elderly_activity",
     "general",
@@ -32,7 +33,15 @@ class IntentDecision:
 
     @property
     def is_medical(self) -> bool:
-        return self.intent == "medical_appointment"
+        return self.intent in {"medical_query", "medical_booking"}
+
+    @property
+    def is_medical_query(self) -> bool:
+        return self.intent == "medical_query"
+
+    @property
+    def is_medical_booking(self) -> bool:
+        return self.intent == "medical_booking"
 
     @property
     def is_cash_sharing(self) -> bool:
@@ -61,6 +70,30 @@ class KeywordIntentRecognizer(IntentRecognizer):
     DEFAULT_CASH_SHARING_TERMS = ("現金分享", "現金分享計劃")
     DEFAULT_ELDERLY_ACTIVITY_TERMS = ("長者活動", "文娛活動", "興趣班")
     DEFAULT_MEDICAL_TERMS = ("醫療", "預約", "覆診", "睇醫生", "改期")
+    DEFAULT_MEDICAL_BOOKING_TERMS = (
+        "可預約時段",
+        "預約時段",
+        "可預約",
+        "想預約",
+        "要預約",
+        "預約醫療服務",
+        "預約服務",
+        "預約檢查",
+    )
+    DEFAULT_MEDICAL_QUERY_TERMS = (
+        "查詢自己的醫療預約",
+        "查詢我的醫療預約",
+        "查詢醫療預約",
+        "查詢自己的預約",
+        "查詢我的預約",
+        "查詢預約紀錄",
+        "查詢預約記錄",
+        "我的醫療預約",
+        "預約紀錄",
+        "預約記錄",
+        "已有預約",
+        "已預約",
+    )
 
     def __init__(
         self,
@@ -81,9 +114,15 @@ class KeywordIntentRecognizer(IntentRecognizer):
         for term in self.elderly_activity_terms:
             if term in message:
                 return IntentDecision("elderly_activity", "keyword", 1.0, term)
+        for term in self.DEFAULT_MEDICAL_BOOKING_TERMS:
+            if term in message:
+                return IntentDecision("medical_booking", "keyword", 1.0, term)
+        for term in self.DEFAULT_MEDICAL_QUERY_TERMS:
+            if term in message:
+                return IntentDecision("medical_query", "keyword", 1.0, term)
         for term in self.medical_terms:
             if term in message:
-                return IntentDecision("medical_appointment", "keyword", 1.0, term)
+                return IntentDecision("medical_booking", "keyword", 1.0, term)
         return IntentDecision("general", "keyword", 1.0)
 
 
@@ -121,12 +160,14 @@ class LlmIntentRecognizer(IntentRecognizer):
                 {
                     "role": "system",
                     "content": (
-                        "你是 Ponte 的 intent classifier。只能返回 JSON object，格式為 "
-                        '{"intent":"medical_appointment"、"cash_sharing"、"elderly_activity"或"general",'
-                        '"confidence":0到1}。'
+                        "你是 Ponte 的 intent classifier。只能返回一個 JSON object，例如 "
+                        '{"intent":"medical_query","confidence":0.9}。'
+                        "intent 必須是 medical_query、medical_booking、cash_sharing、"
+                        "elderly_activity 或 general；confidence 必須是 0 到 1 的數字。"
                         "cash_sharing 包括現金分享或現金分享計劃；"
                         "elderly_activity 包括長者活動、文娛活動或興趣班；"
-                        "medical_appointment 包括醫療、預約、覆診、睇醫生或改期；"
+                        "medical_query 是查詢使用者自己已有的醫療預約或預約紀錄；"
+                        "medical_booking 是安排醫療服務、預約檢查，或查詢可預約服務和時段；"
                         "其他內容使用 general。"
                     ),
                 },
@@ -204,8 +245,15 @@ class LlmIntentRecognizer(IntentRecognizer):
         if not isinstance(value, str):
             raise IntentRecognitionError("LLM intent must be a string")
         normalized = value.strip().casefold()
-        if normalized in {"medical", "medical_appointment", "appointment", "booking"}:
-            return "medical_appointment"
+        if normalized in {
+            "medical_query",
+            "appointment_query",
+            "my_appointments",
+            "query_medical_appointment",
+        }:
+            return "medical_query"
+        if normalized in {"medical", "medical_booking", "medical_appointment", "appointment", "booking"}:
+            return "medical_booking"
         if normalized in {"cash", "cash_sharing"}:
             return "cash_sharing"
         if normalized in {"activity", "elderly_activity"}:
