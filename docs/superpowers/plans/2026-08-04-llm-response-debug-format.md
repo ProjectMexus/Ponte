@@ -31,7 +31,7 @@
 - `log_debug_event` emits one event whose content fields are separated onto multiple lines.
 - `_PonteStreamHandler.format(record: logging.LogRecord) -> str` prefixes every rendered continuation line with the same timestamp, level, and component.
 
-- [ ] **Step 1: Write failing formatting tests**
+- [x] **Step 1: Write failing formatting tests**
 
 Add tests that capture actual stderr under `PONTE_LOG_LEVEL=DEBUG` and assert the JSON is indented and every output line has the complete prefix:
 
@@ -57,7 +57,7 @@ def test_debug_json_is_pretty_and_each_line_has_component_prefix(self):
 
 Retain the existing tests that assert INFO safe events remain one-line and that redaction still hides nested credentials.
 
-- [ ] **Step 2: Run the focused formatting tests and verify they fail**
+- [x] **Step 2: Run the focused formatting tests and verify they fail**
 
 Run:
 
@@ -67,7 +67,7 @@ python3 -m unittest tests.test_ponte_logging -v
 
 Expected: FAIL because the current logger serializes JSON compactly and does not prefix continuation lines.
 
-- [ ] **Step 3: Implement pretty JSON rendering and continuation prefixes**
+- [x] **Step 3: Implement pretty JSON rendering and continuation prefixes**
 
 In `log_debug_event`:
 
@@ -85,7 +85,7 @@ In `_PonteStreamHandler.format`:
 
 Never log unredacted values while computing the formatted message; any serialization exception must return without emitting the DEBUG event.
 
-- [ ] **Step 4: Run formatting tests and verify they pass**
+- [x] **Step 4: Run formatting tests and verify they pass**
 
 Run:
 
@@ -95,7 +95,7 @@ python3 -m unittest tests.test_ponte_logging -v
 
 Expected: PASS, including INFO gating, redaction, stderr, path redaction, and pretty DEBUG formatting.
 
-- [ ] **Step 5: Commit the logger formatting unit**
+- [x] **Step 5: Commit the logger formatting unit**
 
 ```bash
 git add ponte_logging.py tests/test_ponte_logging.py
@@ -113,7 +113,7 @@ git commit -m "feat: format debug json logs for terminal"
 - Keep `LlmIntentRecognizer.recognize(message: str) -> IntentDecision` and `_request_json(request: Request, timeout: float) -> Mapping[str, Any]` externally compatible.
 - `_request_json` raises `IntentRecognitionError` with `response={"status": int, "body": object}` when an HTTP/JSON response was obtained but cannot be returned as a mapping.
 
-- [ ] **Step 1: Write failing response/error-path tests**
+- [x] **Step 1: Write failing response/error-path tests**
 
 Add tests in `middleware/tests/test_intent.py` for these exact cases:
 
@@ -176,7 +176,7 @@ def test_llm_debug_logs_response_unavailable_without_exception_message(self):
 
 Also add a normal-response parse-error test with a medical marker and an INFO-level assertion that all response/body markers are absent.
 
-- [ ] **Step 2: Run the response-path tests and verify they fail**
+- [x] **Step 2: Run the response-path tests and verify they fail**
 
 Run:
 
@@ -186,7 +186,7 @@ python3 -m unittest middleware.tests.test_intent -v
 
 Expected: FAIL because parse errors and transport errors currently emit no `receive_debug`, and `_request_json` discards HTTP error bodies.
 
-- [ ] **Step 3: Preserve raw response snapshots in the HTTP transport**
+- [x] **Step 3: Preserve raw response snapshots in the HTTP transport**
 
 In `middleware/intent.py`:
 
@@ -197,7 +197,7 @@ In `middleware/intent.py`:
 5. For a normal HTTP response, read/decode the body before parsing. On JSON decode failure or a non-mapping JSON value, raise `IntentRecognitionError("LLM response must be a JSON object", response={"status": status, "body": decoded_body})`; on a mapping, return it unchanged.
 6. For `URLError`, OSError and other body-unavailable failures, raise the existing fixed `IntentRecognitionError` without a response snapshot. Do not include exception messages in the error text or snapshot.
 
-- [ ] **Step 4: Emit exactly one receive DEBUG event for every attempt**
+- [x] **Step 4: Emit exactly one receive DEBUG event for every attempt**
 
 Refactor `LlmIntentRecognizer.recognize` around a local `response = _NO_RESPONSE`:
 
@@ -241,7 +241,7 @@ except IntentRecognitionError as error:
 
 Handle the generic exception branch analogously: use the local response if transport returned one, otherwise `response_unavailable=true`; then preserve the existing `IntentRecognitionError("LLM intent request failed")` conversion. The inner parse branch must log before re-raising so the outer error branch does not produce a duplicate receive event.
 
-- [ ] **Step 5: Run LLM response tests and verify they pass**
+- [x] **Step 5: Run LLM response tests and verify they pass**
 
 Run:
 
@@ -251,7 +251,7 @@ python3 -m unittest middleware.tests.test_intent -v
 
 Expected: PASS for success, invalid schema, invalid JSON, HTTP JSON/text errors, no-response errors, INFO gating, redaction, and fallback behavior.
 
-- [ ] **Step 6: Commit the LLM response unit**
+- [x] **Step 6: Commit the LLM response unit**
 
 ```bash
 git add middleware/intent.py middleware/tests/test_intent.py
@@ -268,7 +268,7 @@ git commit -m "feat: log llm responses on every outcome"
 **Interfaces:**
 - Documents the existing `PONTE_LOG_LEVEL=DEBUG` configuration; no new environment variable or public API.
 
-- [ ] **Step 1: Add failing documentation assertions**
+- [x] **Step 1: Add failing documentation assertions**
 
 Extend `RunStackTests.test_terminal_logging_configuration_is_documented` with:
 
@@ -279,7 +279,7 @@ self.assertIn("multi-line", document)
 self.assertIn("每行", document)
 ```
 
-- [ ] **Step 2: Run the documentation test and verify it fails**
+- [x] **Step 2: Run the documentation test and verify it fails**
 
 Run:
 
@@ -289,11 +289,11 @@ python3 -m unittest tests.test_run_stack.RunStackTests.test_terminal_logging_con
 
 Expected: FAIL because the current docs describe content logging but not error-response capture or multi-line formatting.
 
-- [ ] **Step 3: Update both READMEs without changing the security contract**
+- [x] **Step 3: Update both READMEs without changing the security contract**
 
 In both Terminal logging sections, state that DEBUG logs provider success/error response bodies when available, logs `response_unavailable` plus fixed error type when no body exists, formats JSON as multi-line indented records with a full prefix on every line, and still masks credentials. Retain the warning that DEBUG may contain medical data and HTTP bodies remain excluded.
 
-- [ ] **Step 4: Run documentation tests and verify they pass**
+- [x] **Step 4: Run documentation tests and verify they pass**
 
 Run:
 
@@ -303,7 +303,7 @@ python3 -m unittest tests.test_run_stack -v
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the documentation unit**
+- [x] **Step 5: Commit the documentation unit**
 
 ```bash
 git add README.md middleware/README.md tests/test_run_stack.py
@@ -315,7 +315,7 @@ git commit -m "docs: describe llm debug error responses"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-08-04-llm-response-debug-format.md`
 
-- [ ] **Step 1: Run focused tests**
+- [x] **Step 1: Run focused tests**
 
 ```bash
 python3 -m unittest tests.test_ponte_logging middleware.tests.test_intent tests.test_run_stack -q
@@ -323,7 +323,7 @@ python3 -m unittest tests.test_ponte_logging middleware.tests.test_intent tests.
 
 Expected: all focused tests pass.
 
-- [ ] **Step 2: Run complete repository suites**
+- [x] **Step 2: Run complete repository suites**
 
 ```bash
 PONTE_LOG_LEVEL=INFO python3 -m unittest discover -s tests -q
@@ -333,7 +333,7 @@ PONTE_LOG_LEVEL=INFO python3 -m unittest discover -s middleware/tests -q
 
 Expected: all suites pass; socket suites may require the approved local execution permission.
 
-- [ ] **Step 3: Run static checks**
+- [x] **Step 3: Run static checks**
 
 ```bash
 python3 -m compileall -q MCP middleware mock_backends frontend scripts tests
@@ -343,11 +343,11 @@ git diff --check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 4: Run a DEBUG error smoke test**
+- [x] **Step 4: Run a DEBUG error smoke test**
 
 Run the LLM error-path test with `PONTE_LOG_LEVEL=DEBUG` and verify captured stderr contains a pretty `receive_debug` response/status/body or `response_unavailable`, while excluding API key, Authorization, and exception-secret markers. Also run the existing local stack DEBUG smoke to confirm MCP logs remain prefixed and unaffected.
 
-- [ ] **Step 5: Mark completed steps and commit the plan update**
+- [x] **Step 5: Mark completed steps and commit the plan update**
 
 Mark every completed checkbox in this plan with `x`, run `git diff --check`, and commit only the plan update:
 
