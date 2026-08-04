@@ -50,7 +50,7 @@
 - `KeywordIntentRecognizer.recognize(message: str) -> IntentDecision` classifies appointment-record queries separately from booking/slot searches.
 - `LlmIntentRecognizer._normalize_intent(value: Any) -> IntentName` accepts the new canonical names and maps legacy `medical_appointment`, `appointment`, and `booking` to `medical_booking`.
 
-- [ ] **Step 1: Write failing intent tests**
+- [x] **Step 1: Write failing intent tests**
 
 Add tests alongside the current intent tests:
 
@@ -81,7 +81,7 @@ Add tests alongside the current intent tests:
 
 Import `json` in the test module if it is not already present. Also update the existing unsupported-intent and hybrid fallback expectations to use `medical_query`/`medical_booking` where the test is exercising a medical response.
 
-- [ ] **Step 2: Run the focused tests and confirm failure**
+- [x] **Step 2: Run the focused tests and confirm failure**
 
 Run:
 
@@ -91,7 +91,7 @@ python3 -m unittest middleware.tests.test_intent -v
 
 Expected: the new properties and intent values fail because the current recognizer only emits `medical_appointment`.
 
-- [ ] **Step 3: Implement the smallest intent-layer change**
+- [x] **Step 3: Implement the smallest intent-layer change**
 
 In `middleware/intent.py`:
 
@@ -101,7 +101,7 @@ In `middleware/intent.py`:
 4. Replace the LLM system prompt's single medical category with explicit JSON instructions for `medical_query` versus `medical_booking`; say that a request about the user's existing records is query and a request to arrange a service or find available slots is booking.
 5. Normalize `medical_query`, `appointment_query`, `my_appointments`, and `query_medical_appointment` to `medical_query`; normalize `medical_booking`, `medical_appointment`, `appointment`, and `booking` to `medical_booking`.
 
-- [ ] **Step 4: Run intent tests and inspect the request contract**
+- [x] **Step 4: Run intent tests and inspect the request contract**
 
 Run:
 
@@ -112,7 +112,7 @@ python3 -m compileall -q middleware
 
 Expected: all intent tests pass; the LLM request still uses the existing OpenAI-compatible `messages` JSON shape and no API key is printed.
 
-- [ ] **Step 5: Commit the intent layer**
+- [x] **Step 5: Commit the intent layer**
 
 ```bash
 git add middleware/intent.py middleware/tests/test_intent.py
@@ -132,7 +132,7 @@ git commit -m "feat: split medical query and booking intents"
 - `_handle_medical_booking(state: SessionState) -> dict[str, Any]` contains the current appointments-plus-services initialization and returns `selecting_service`.
 - `MiddlewareApplication(..., intent_recognizer: IntentRecognizer | None = None)` and `create_application(..., intent_recognizer: IntentRecognizer | None = None)` allow tests to bypass network LLM calls; `None` keeps the runtime `build_intent_recognizer()` default.
 
-- [ ] **Step 1: Write failing controller tests**
+- [x] **Step 1: Write failing controller tests**
 
 Replace the current test that treats `我想查詢醫療預約` as `selecting_service` with a query-only assertion and add a separate booking assertion:
 
@@ -162,7 +162,7 @@ Replace the current test that treats `我想查詢醫療預約` as `selecting_se
 
 Add a `medical_query`/`medical_booking` injected recognizer test only if needed to isolate controller routing; the real `KeywordIntentRecognizer` should cover the normal messages.
 
-- [ ] **Step 2: Run controller tests and confirm failure**
+- [x] **Step 2: Run controller tests and confirm failure**
 
 Run:
 
@@ -172,7 +172,7 @@ python3 -m unittest middleware.tests.test_controller -v
 
 Expected: the existing controller sends both query and booking messages through the same selecting-service branch.
 
-- [ ] **Step 3: Implement separate controller handlers and test injection**
+- [x] **Step 3: Implement separate controller handlers and test injection**
 
 In `handle_message`, keep cash-sharing and elderly-activity branches first, then route:
 
@@ -187,7 +187,7 @@ Move the current medical initialization into `_handle_medical_booking`. Implemen
 
 Add `IntentRecognizer` imports/type annotations to `middleware/server.py`. Thread the optional recognizer from `create_application` to `MiddlewareApplication` and then to `InteractionController`, without changing the default behavior when the argument is omitted.
 
-- [ ] **Step 4: Run middleware unit tests**
+- [x] **Step 4: Run middleware unit tests**
 
 Run:
 
@@ -197,7 +197,7 @@ python3 -m unittest middleware.tests.test_intent middleware.tests.test_controlle
 
 Expected: query calls only `medical.get_my_appointments`; booking still reaches `selecting_service`; confirmation still calls `medical.create_appointment` only after `confirm`.
 
-- [ ] **Step 5: Commit the controller split**
+- [x] **Step 5: Commit the controller split**
 
 ```bash
 git add middleware/controller.py middleware/server.py middleware/tests/test_controller.py
@@ -214,7 +214,7 @@ git commit -m "feat: route medical query and booking workflows"
 - Integration setup passes `KeywordIntentRecognizer()` to `create_application` so tests remain offline and deterministic.
 - The existing action API sequence remains the public integration contract: `search_slots`, `select_slot`, and `confirm`.
 
-- [ ] **Step 1: Update the existing read-only smoke expectations**
+- [x] **Step 1: Update the existing read-only smoke expectations**
 
 In the full-stack smoke test, use `我想查詢自己的醫療預約` and assert:
 
@@ -228,7 +228,7 @@ self.assertEqual(
 
 Pass `intent_recognizer=KeywordIntentRecognizer()` to the application setup in both integration test modules.
 
-- [ ] **Step 2: Add the persistence/readback integration assertion**
+- [x] **Step 2: Add the persistence/readback integration assertion**
 
 After the existing booking action sequence in `test_message_to_medical_tool_reaches_mock_backend`, capture the created appointment ID from the `medical.create_appointment` tool event, then issue a new message request with a different session:
 
@@ -250,7 +250,7 @@ self.assertIn(appointment_id, [item["id"] for item in queried["data"]["appointme
 
 Keep the existing `search_slots` assertion so the test also proves available slots are returned by `medical.search_appointment_slots` before the write.
 
-- [ ] **Step 3: Run the integration tests**
+- [x] **Step 3: Run the integration tests**
 
 Run:
 
@@ -260,7 +260,7 @@ python3 -m unittest tests.test_middleware_integration tests.test_full_stack_inte
 
 Expected: the real middleware → MCP stdio → REST adapter → mock backend path creates a persisted appointment and a later query reads it back; no external Gemini request is made.
 
-- [ ] **Step 4: Commit persistence coverage**
+- [x] **Step 4: Commit persistence coverage**
 
 ```bash
 git add tests/test_middleware_integration.py tests/test_full_stack_integration.py
@@ -280,7 +280,7 @@ git commit -m "test: verify medical booking persistence and readback"
 - Service controls send `{service_id, date_from, date_to}` with `kind: "search_slots"`.
 - Slot controls send `{slot_id}` with `kind: "select_slot"`.
 
-- [ ] **Step 1: Add static contract assertions**
+- [x] **Step 1: Add static contract assertions**
 
 Extend `tests/test_frontend_static.py` to load `frontend/interaction-view.js` and assert it contains the booking states and payload field names:
 
@@ -290,7 +290,7 @@ for marker in ("selecting_service", "date_from", "date_to", "service_id", "selec
     self.assertIn(marker, source)
 ```
 
-- [ ] **Step 2: Run the static test and confirm the new contract is absent**
+- [x] **Step 2: Run the static test and confirm the new contract is absent**
 
 Run:
 
@@ -300,7 +300,7 @@ python3 -m unittest tests.test_frontend_static -v
 
 Expected: the new field/state assertions fail before the renderer is updated.
 
-- [ ] **Step 3: Implement deterministic service/date/slot controls**
+- [x] **Step 3: Implement deterministic service/date/slot controls**
 
 Refactor `renderActions` in `frontend/interaction-view.js` to receive the response data in addition to `actions`. When `response.current_step === "select_service"` or `response.task_state === "selecting_service"`:
 
@@ -317,7 +317,7 @@ For confirmation, cancellation, human help, and diagnostic actions, keep the exi
 
 Add small CSS rules for a readable date row, service choices, and slot choices while reusing the existing `.action-button` visual language. Do not add a frontend build dependency.
 
-- [ ] **Step 4: Run frontend static and compile checks**
+- [x] **Step 4: Run frontend static and compile checks**
 
 Run:
 
@@ -328,7 +328,7 @@ python3 -m compileall -q frontend
 
 Expected: all static checks pass and the browser bundle remains syntax-valid.
 
-- [ ] **Step 5: Commit the frontend action flow**
+- [x] **Step 5: Commit the frontend action flow**
 
 ```bash
 git add frontend/interaction-view.js frontend/styles.css tests/test_frontend_static.py
@@ -348,7 +348,7 @@ git commit -m "feat: add frontend medical booking controls"
 - `.env.example` must use `gemini-2.5-flash-lite` and leave the API key value blank.
 - Documentation must distinguish the read-only phrase `我想查詢自己的醫療預約` from the booking phrase `我想預約醫療服務` and explain that available slots are returned during booking.
 
-- [ ] **Step 1: Update configuration and documentation text**
+- [x] **Step 1: Update configuration and documentation text**
 
 Change `.env.example` from the blank OpenAI defaults to:
 
@@ -362,7 +362,7 @@ PONTE_LLM_MODEL=gemini-2.5-flash-lite
 
 Update README examples and acceptance wording so the read-only smoke no longer claims that a query enters `selecting_service`. Document that a booking creates a mock appointment and a later query reads it back.
 
-- [ ] **Step 2: Verify no local secret was staged and check documentation formatting**
+- [x] **Step 2: Verify no local secret was staged and check documentation formatting**
 
 Run:
 
@@ -374,7 +374,7 @@ git diff -- .env.example README.md middleware/README.md frontend/README.md
 
 Expected: only the intended documentation/configuration files are modified; `.env` remains ignored and no API key appears in the diff.
 
-- [ ] **Step 3: Commit configuration and documentation**
+- [x] **Step 3: Commit configuration and documentation**
 
 ```bash
 git add .env.example README.md middleware/README.md frontend/README.md
@@ -386,7 +386,7 @@ git commit -m "docs: document llm medical query and booking flows"
 **Files:**
 - Verify: all modified source, test, config, and documentation files.
 
-- [ ] **Step 1: Run focused middleware and integration tests**
+- [x] **Step 1: Run focused middleware and integration tests**
 
 ```bash
 python3 -m unittest middleware.tests.test_intent middleware.tests.test_controller -v
@@ -395,7 +395,7 @@ python3 -m unittest tests.test_middleware_integration tests.test_full_stack_inte
 
 Expected: all tests pass without external network calls.
 
-- [ ] **Step 2: Run the complete repository test suite and compile check**
+- [x] **Step 2: Run the complete repository test suite and compile check**
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -407,7 +407,7 @@ git diff --check
 
 Expected: all unittest modules pass, compileall exits successfully, and `git diff --check` reports no whitespace errors.
 
-- [ ] **Step 3: Perform a local runtime smoke with the configured `.env`**
+- [x] **Step 3: Perform a local runtime smoke with the configured `.env`**
 
 Start the stack with a persistent data directory:
 
@@ -425,7 +425,9 @@ In the frontend, verify this sequence:
 
 Stop the stack with `Ctrl-C` after the smoke. Do not include any API key or private response content in logs or the final report.
 
-- [ ] **Step 4: Review final status and report evidence**
+Verification note: local configuration loading confirmed `HybridIntentRecognizer` with `LlmIntentRecognizer` and `gemini-2.5-flash-lite`. A live Gemini request was attempted without printing the key, but the external connection did not complete in the available environment; the live LLM path is therefore not claimed as externally verified. Deterministic MCP/backend integration and fallback behavior are covered by the test suite.
+
+- [x] **Step 4: Review final status and report evidence**
 
 Run:
 
