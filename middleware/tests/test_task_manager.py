@@ -2,7 +2,6 @@ import unittest
 
 from middleware.session import SessionState, build_response
 from middleware.task_manager.contracts import RecoveryOption, RecoveryPlan
-from middleware.task_manager.manager import TaskManager
 from middleware.task_manager.transitions import InvalidTaskTransition, ensure_transition
 
 
@@ -25,6 +24,8 @@ class TaskManagerContractTests(unittest.TestCase):
         self.assertEqual(plan.to_dict()["options"][0]["action"], "retry")
 
     def test_task_manager_response_contains_recovery_and_actions(self):
+        from middleware.task_manager.manager import TaskManager
+
         state = SessionState("S-TASK-MANAGER")
         manager = TaskManager(state)
         plan = RecoveryPlan(

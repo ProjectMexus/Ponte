@@ -143,7 +143,7 @@ git commit -m "test: define recoverable task error contracts"
 - Consumes: Task 1 transition and serialization tests.
 - Produces: `RecoveryField`, `RecoveryOption`, `RecoveryPlan`, `TERMINAL_TASK_STATES`, and `ensure_transition(current, target)`.
 
-- [ ] **Step 1: Define serializable recovery value objects**
+- [x] **Step 1: Define serializable recovery value objects**
 
 Implement frozen dataclasses in `contracts.py`:
 
@@ -183,7 +183,7 @@ class RecoveryPlan:
 
 Validate non-empty `category`, `reason_code`, `explanation`, option action/label and mapping payloads in `__post_init__`. `to_dict()` must deep-copy nested values.
 
-- [ ] **Step 2: Define lifecycle constants and allowed transitions**
+- [x] **Step 2: Define lifecycle constants and allowed transitions**
 
 In `transitions.py`, define:
 
@@ -201,21 +201,21 @@ def ensure_transition(current: str, target: str) -> None:
 
 Allow the existing workflow transitions plus recovery resume paths. In particular, allow `querying → awaiting_user_input`, `awaiting_user_input → querying`, `awaiting_user_input → selecting_service`, `awaiting_user_input → selecting_slot`, `awaiting_user_input → awaiting_confirmation`, and `awaiting_user_input → cancelled/human_handoff`. Reject every transition out of `completed`, `cancelled`, `failed`, or `human_handoff`.
 
-- [ ] **Step 3: Export the package contract**
+- [x] **Step 3: Export the package contract**
 
 Export the value objects and transition helpers from `middleware/task_manager/__init__.py` without importing the controller or HTTP server. Keep package imports free of side effects.
 
-- [ ] **Step 4: Run the focused contract tests**
+- [x] **Step 4: Run the focused contract tests**
 
 Run:
 
 ```powershell
-python -m unittest middleware.tests.test_task_manager -v
+python -m unittest middleware.tests.test_task_manager.TaskManagerContractTests.test_awaiting_user_input_is_not_terminal_and_can_resume middleware.tests.test_task_manager.TaskManagerContractTests.test_terminal_task_cannot_resume middleware.tests.test_task_manager.TaskManagerContractTests.test_recovery_plan_serializes_safe_options -v
 ```
 
 Expected: PASS for value-object serialization and valid/invalid transitions.
 
-- [ ] **Step 5: Commit the Task Manager contract layer**
+- [x] **Step 5: Commit the Task Manager contract layer**
 
 ```powershell
 git add middleware/task_manager middleware/tests/test_task_manager.py
