@@ -1,12 +1,18 @@
 import json
 import os
+import queue
 import subprocess
 import threading
 import unittest
 from unittest.mock import patch
 
 from MCP.errors import AdapterError
-from middleware.mcp_client import McpClientError, McpStdioClient
+from middleware.mcp_client import (
+    McpClientError,
+    McpStdioClient,
+    ThreadedStdoutReader,
+    create_stdout_reader,
+)
 
 
 class FakeProcess:
@@ -15,8 +21,7 @@ class FakeProcess:
         self.writes = []
         self.returncode = None
         self.closed = False
-        self._read_fd, self._write_fd = os.pipe()
-        self.stdout = os.fdopen(self._read_fd, "r", encoding="utf-8")
+        self.stdout = FakeStdout()
         self.stdin = _FakeStdin(self)
 
     def factory(self, *args, **kwargs):
@@ -32,11 +37,10 @@ class FakeProcess:
             return
         response = self.responses.pop(0)
         if response is None:
-            os.close(self._write_fd)
-            self._write_fd = -1
+            self.stdout.close()
             return
         encoded = response if isinstance(response, str) else json.dumps(response)
-        os.write(self._write_fd, (encoded + "\n").encode("utf-8"))
+        self.stdout.put(encoded + "\n")
 
     def poll(self):
         return self.returncode
@@ -64,9 +68,23 @@ class FakeProcess:
             self.stdout.close()
         except OSError:
             pass
-        if self._write_fd >= 0:
-            os.close(self._write_fd)
-            self._write_fd = -1
+
+
+class FakeStdout:
+    def __init__(self):
+        self._lines = queue.Queue()
+        self.closed = False
+
+    def readline(self):
+        return self._lines.get()
+
+    def put(self, line):
+        self._lines.put(line)
+
+    def close(self):
+        if not self.closed:
+            self.closed = True
+            self._lines.put("")
 
 
 class _FakeStdin:
@@ -84,6 +102,25 @@ class _FakeStdin:
 
     def close(self):
         self.closed = True
+
+
+class BlockingStdout:
+    def __init__(self):
+        self.released = threading.Event()
+        self.line = ""
+        self.closed = False
+
+    def readline(self):
+        self.released.wait()
+        return self.line
+
+    def release(self, line):
+        self.line = line
+        self.released.set()
+
+    def close(self):
+        self.closed = True
+        self.released.set()
 
 
 def initialize_response(request_id=1):
@@ -105,9 +142,23 @@ class McpStdioClientTests(unittest.TestCase):
             project_root=os.getcwd(),
             timeout=timeout,
             process_factory=process.factory,
+            stdout_reader_factory=ThreadedStdoutReader,
         )
         self.addCleanup(client.close)
         return client
+
+    def test_factory_uses_threaded_reader_for_windows_pipes(self):
+        stdout = BlockingStdout()
+
+        with patch("middleware.mcp_client.os.name", "nt"):
+            reader = create_stdout_reader(stdout)
+
+        self.assertIsInstance(reader, ThreadedStdoutReader)
+        try:
+            stdout.release('{"jsonrpc":"2.0"}\n')
+            self.assertEqual(reader.read_line(0.2), '{"jsonrpc":"2.0"}\n')
+        finally:
+            reader.close()
 
     def test_start_performs_initialize_and_initialized_notification(self):
         process = FakeProcess([initialize_response()])

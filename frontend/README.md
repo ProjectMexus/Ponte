@@ -5,7 +5,7 @@
 ## 啟動前端
 
 ```bash
-python3 -m frontend.server --host 127.0.0.1 --port 5173
+python -m frontend.server --host 127.0.0.1 --port 5173
 ```
 
 開啟 [http://127.0.0.1:5173](http://127.0.0.1:5173)。前端預設連接 `http://127.0.0.1:8090` 的 middleware；middleware 尚未啟動時，頁面仍然可以載入，並會顯示可理解的連線錯誤，文字輸入仍保持可用。
@@ -38,7 +38,7 @@ http://127.0.0.1:15173/?middleware=http://127.0.0.1:18090
 ## 驗證
 
 ```bash
-python3 -m unittest tests.test_frontend_static -v
+python -m unittest tests.test_frontend_static -v
 node --check frontend/app.js
 node --check frontend/mcp-client.js
 node --check frontend/interaction-view.js

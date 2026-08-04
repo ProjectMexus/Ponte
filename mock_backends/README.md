@@ -9,7 +9,7 @@
 需要 Python 3.13 或以上，不需要安裝第三方套件。在 repository 根目錄執行：
 
 ```bash
-python3 -m mock_backends.server \
+python -m mock_backends.server \
   --host 127.0.0.1 \
   --port 8080
 ```
@@ -24,7 +24,7 @@ server 會在同一個 process mount 以下 domain：
 參數預設值為 `127.0.0.1:8080` 和 repository root 下的 `database/`；可用 `--host`、`--port` 及 `--data-dir` 覆寫。若只想以 temporary directory 啟動：
 
 ```bash
-python3 -m mock_backends.server \
+python -m mock_backends.server \
   --host 127.0.0.1 \
   --port 8080 \
   --data-dir /tmp/ponte-mock-data
@@ -104,14 +104,14 @@ database/
 執行 backend 的單元、domain、HTTP smoke 和 persistence tests：
 
 ```bash
-python3 -m unittest discover -s tests -v
-python3 -m compileall -q mock_backends tests
+python -m unittest discover -s tests -v
+python -m compileall -q mock_backends tests
 ```
 
 若只想執行 backend 相關測試：
 
 ```bash
-python3 -m unittest \
+python -m unittest \
   tests.core.test_core_helpers \
   tests.core.test_idempotency \
   tests.core.test_persistence \

@@ -44,7 +44,7 @@ cp .env.example .env
 在 repository 根目錄執行完整 stack：
 
 ```bash
-python3 scripts/run_stack.py
+python scripts/run_stack.py
 ```
 
 Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio server 及 frontend，並預設把 mock state 寫入 repository root 下、與 `mock_backends/` 同級的 `database/`。看到 `Ponte stack is ready.` 後，開啟它列出的 Frontend URL，輸入以下唯讀查詢：
@@ -86,7 +86,7 @@ mcp one_account.search_elderly_activities {"available_only":true}
 需要使用其他資料根目錄時，可指定 `--data-dir` 覆寫預設的 `database/`：
 
 ```bash
-python3 scripts/run_stack.py --data-dir /tmp/ponte-mock-data
+python scripts/run_stack.py --data-dir /tmp/ponte-mock-data
 ```
 
 建立操作會以 JSON Lines 格式寫入 `database/**/*.txt`；medical 預約位於 `database/medical/appointments.txt`，Task 位於 `database/medical/tasks.txt`，而 `database/id_sequences.txt` 保存可重啟的 mock ID sequence。`database/` 只保存本機 mock state，`.txt` 內容不會提交到 repository。
@@ -96,13 +96,13 @@ python3 scripts/run_stack.py --data-dir /tmp/ponte-mock-data
 `run_stack.py` 會在啟動 backend、middleware/MCP 和 frontend 前載入本地 `.env`；shell 中已存在的同名變數優先。可用 `PONTE_LOG_LEVEL` 控制 terminal logging，預設使用 `INFO`：
 
 ```bash
-PONTE_LOG_LEVEL=INFO python3 scripts/run_stack.py
+PONTE_LOG_LEVEL=INFO python scripts/run_stack.py
 ```
 
 INFO 只輸出安全摘要，例如 method/path/status、model/endpoint metadata、message character counts、normalized intent、tool name/input keys、outcome 和 latency。需要在本機除錯內容流時可使用 DEBUG：
 
 ```bash
-PONTE_LOG_LEVEL=DEBUG python3 scripts/run_stack.py
+PONTE_LOG_LEVEL=DEBUG python scripts/run_stack.py
 ```
 
 DEBUG 會在 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component logs 之外，顯示完整 LLM prompt/response 及 MCP request/response，包括醫療資料（medical data）。對 LLM provider 而言，DEBUG 會記錄 provider success response bodies 和 provider error response bodies：只要取得 response，就會保留成功回應、解析失敗回應或 HTTP error body；若沒有 response 可取得，則記錄 `response_unavailable=true` 和固定的 error type。JSON 內容會以 indented multi-line 格式輸出，每行都保留完整的 timestamp/level/component prefix，方便按行閱讀與搜尋。frontend、middleware HTTP server 和 mock backend 仍不記錄 HTTP body；API key、Authorization、Cookie、Bearer token 及其他 credentials 在任何 level 都會遮罩。DEBUG 可能包含醫療資料，只應在受控的本機 terminal 使用；完成除錯後改回 `PONTE_LOG_LEVEL=INFO`。
@@ -118,13 +118,13 @@ rg '\[(frontend|middleware|llm|mcp|backend)\]' ponte-terminal.log
 需要逐層除錯時，可在不同 terminal 依次執行：
 
 ```bash
-python3 -m mock_backends.server \
+python -m mock_backends.server \
   --host 127.0.0.1 --port 8080 --data-dir /tmp/ponte-mock-data
 
-python3 -m middleware.server \
+python -m middleware.server \
   --host 127.0.0.1 --port 8090
 
-python3 -m frontend.server \
+python -m frontend.server \
   --host 127.0.0.1 --port 5173
 ```
 
@@ -138,10 +138,10 @@ http://127.0.0.1:5173/?middleware=http://127.0.0.1:18090
 
 | 服務 | 啟動入口 | 預設位置 | 說明 |
 | --- | --- | --- | --- |
-| Frontend | `python3 -m frontend.server` | `127.0.0.1:5173` | 對話、語音及服務工作區 |
-| Middleware | `python3 -m middleware.server` | `127.0.0.1:8090` | `/api/health`、`/api/interactions/*`、受控 MCP 呼叫 |
-| Mock Backend | `python3 -m mock_backends.server` | `127.0.0.1:8080` | One Account、Medical、Social Welfare HTTP mock |
-| MCP Server | `python3 -m MCP` | stdio | 固定 tool registry；通常由 middleware 管理 |
+| Frontend | `python -m frontend.server` | `127.0.0.1:5173` | 對話、語音及服務工作區 |
+| Middleware | `python -m middleware.server` | `127.0.0.1:8090` | `/api/health`、`/api/interactions/*`、受控 MCP 呼叫 |
+| Mock Backend | `python -m mock_backends.server` | `127.0.0.1:8080` | One Account、Medical、Social Welfare HTTP mock |
+| MCP Server | `python -m MCP` | stdio | 固定 tool registry；通常由 middleware 管理 |
 
 Mock backend 的主要路徑包括：
 
@@ -155,10 +155,10 @@ Mock backend 的主要路徑包括：
 執行項目、MCP 及 middleware 測試：
 
 ```bash
-python3 -m unittest discover -s tests -v
-python3 -m unittest discover -s MCP/tests -v
-python3 -m unittest discover -s middleware/tests -v
-python3 -m compileall -q MCP middleware mock_backends frontend scripts tests
+python -m unittest discover -s tests -v
+python -m unittest discover -s MCP/tests -v
+python -m unittest discover -s middleware/tests -v
+python -m compileall -q MCP middleware mock_backends frontend scripts tests
 ```
 
 測試只使用 localhost、temporary directories 及 mock data，不需要外部服務。HTTP smoke／integration tests 需要環境允許綁定 `127.0.0.1` 的 ephemeral socket。

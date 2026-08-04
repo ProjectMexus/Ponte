@@ -7,7 +7,7 @@
 需要 Python 3.13 或以上版本，不需要安裝第三方套件。backend 預設為 `http://127.0.0.1:8080`，可用 `PONTE_BACKEND_URL` 覆寫：
 
 ```bash
-PONTE_BACKEND_URL=http://127.0.0.1:8080 python3 -m MCP
+PONTE_BACKEND_URL=http://127.0.0.1:8080 python -m MCP
 ```
 
 MCP server 使用 newline-delimited JSON-RPC。stdout 只輸出 protocol response；診斷訊息應寫到 stderr。server 支援：
@@ -100,8 +100,8 @@ MCP request 範例：
 執行單元、registry、REST、protocol 和本地 fixture backend smoke tests：
 
 ```bash
-python3 -m unittest discover -s MCP/tests -v
-python3 -m compileall -q MCP
+python -m unittest discover -s MCP/tests -v
+python -m compileall -q MCP
 ```
 
 smoke tests 會啟動只綁定 `127.0.0.1` 的 ephemeral fixture server，驗證 stdio MCP → REST adapter → HTTP backend → MCP response 的鏈路，以及 409、malformed response 和 backend unavailable 錯誤。受限 sandbox 可能禁止 local socket bind；若出現 `PermissionError: [Errno 1] Operation not permitted`，需要在允許本地測試 socket 的環境執行 smoke tests。

@@ -1,6 +1,6 @@
 # Ponte Middleware
 
-Ponte middleware 是前端唯一需要呼叫的 HTTP bridge。它以 Python 標準庫提供固定 API，將 Interaction Controller 的醫療查詢及預約流程接到既有 21 個 MCP tools；runtime 會由 middleware 啟動一個 `python3 -m MCP` stdio child，再由 MCP 的 RestAdapter 連接 mock backend。前端不需要知道 backend URL、HTTP method、headers 或 MCP envelope。
+Ponte middleware 是前端唯一需要呼叫的 HTTP bridge。它以 Python 標準庫提供固定 API，將 Interaction Controller 的醫療查詢及預約流程接到既有 21 個 MCP tools；runtime 會由 middleware 啟動一個 `python -m MCP` stdio child，再由 MCP 的 RestAdapter 連接 mock backend。前端不需要知道 backend URL、HTTP method、headers 或 MCP envelope。
 
 ## 啟動
 
@@ -15,19 +15,19 @@ cp .env.example .env
 先啟動 mock backend：
 
 ```bash
-python3 -m mock_backends.server --host 127.0.0.1 --port 8080 --data-dir /tmp/ponte-mock-data
+python -m mock_backends.server --host 127.0.0.1 --port 8080 --data-dir /tmp/ponte-mock-data
 ```
 
 再啟動 middleware；不需要每次在命令前 `set`：
 
 ```bash
-python3 -m middleware.server --host 127.0.0.1 --port 8090
+python -m middleware.server --host 127.0.0.1 --port 8090
 ```
 
 一般完整驗收可直接在 repo 根目錄執行：
 
 ```bash
-python3 scripts/run_stack.py
+python scripts/run_stack.py
 ```
 
 這個 runner 會啟動 backend、middleware、middleware 管理的 MCP stdio server 和 frontend。瀏覽器輸入「我想查詢自己的醫療預約」後，應看到完成狀態、服務已連線，以及只讀的 `medical.get_my_appointments` tool event。輸入「我想預約醫療服務」則會進入服務選擇、日期範圍、可預約時段及確認流程；確認後可再用前一個查詢讀回 mock backend 的預約記錄。也可以輸入「我想查現金分享計劃」或「我想找長者文娛活動」測試只讀的一戶通／長者活動 workflow。
@@ -37,13 +37,13 @@ python3 scripts/run_stack.py
 `run_stack.py` 會在啟動 child processes 前載入本地 `.env`，shell 中已存在的同名環境變數優先。`INFO`（預設）只顯示 safe summaries：
 
 ```bash
-PONTE_LOG_LEVEL=INFO python3 scripts/run_stack.py
+PONTE_LOG_LEVEL=INFO python scripts/run_stack.py
 ```
 
 若要在本機除錯 intent、預約或醫療查詢的內容流，可改用 DEBUG：
 
 ```bash
-PONTE_LOG_LEVEL=DEBUG python3 scripts/run_stack.py
+PONTE_LOG_LEVEL=DEBUG python scripts/run_stack.py
 ```
 
 DEBUG 會使用 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component prefix，並在安全摘要之外顯示完整 LLM prompt/response 及 MCP request/response，包括醫療資料（medical data）。LLM provider 的 success response bodies 和 provider error response bodies 在 DEBUG 中只要可取得就會記錄，包括正常回應、解析失敗回應及 HTTP error body；若沒有 response 可取得，則記錄 `response_unavailable=true` 和固定的 error type。JSON 會以 indented multi-line 格式輸出，每行都保留完整 timestamp/level/component prefix。frontend、middleware HTTP server 和 mock backend 仍不記錄 HTTP body；API key、Authorization、Cookie、Bearer token 及其他 credentials 在任何 level 都會遮罩。DEBUG 可能包含醫療資料，只應在受控的本機 terminal 使用；完成除錯後改回 `PONTE_LOG_LEVEL=INFO`。

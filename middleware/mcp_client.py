@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import selectors
 import subprocess
 import sys
 import time
+from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from pathlib import Path
-from threading import Lock
+from threading import Lock, Thread
 from typing import Any, Callable
 
 from MCP.errors import AdapterError
@@ -41,6 +43,77 @@ class McpClientError(AdapterError):
         )
 
 
+class McpStdoutReader(ABC):
+    """Read newline-delimited MCP responses with a bounded wait."""
+
+    @abstractmethod
+    def read_line(self, timeout: float) -> str:
+        """Return one line or raise ``TimeoutError`` before the deadline."""
+
+    def close(self) -> None:
+        """Release reader-owned resources without closing the process stream."""
+
+
+class SelectorStdoutReader(McpStdoutReader):
+    """Use selector readiness, which works for subprocess pipes on Unix."""
+
+    def __init__(self, stdout: Any) -> None:
+        self.stdout = stdout
+
+    def read_line(self, timeout: float) -> str:
+        selector = selectors.DefaultSelector()
+        try:
+            selector.register(self.stdout, selectors.EVENT_READ)
+            if not selector.select(timeout):
+                raise TimeoutError
+            return self.stdout.readline()
+        finally:
+            selector.close()
+
+
+class ThreadedStdoutReader(McpStdoutReader):
+    """Read Windows subprocess pipes in a daemon thread and await a queue."""
+
+    def __init__(self, stdout: Any) -> None:
+        self.stdout = stdout
+        self._lines: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self._closed = False
+        self._thread = Thread(target=self._read_forever, daemon=True)
+        self._thread.start()
+
+    def _read_forever(self) -> None:
+        try:
+            while True:
+                raw = self.stdout.readline()
+                self._lines.put(("line", raw))
+                if raw == "":
+                    return
+        except Exception as error:
+            self._lines.put(("error", error))
+
+    def read_line(self, timeout: float) -> str:
+        if self._closed:
+            raise ValueError("stdout reader is closed")
+        try:
+            kind, value = self._lines.get(timeout=timeout)
+        except queue.Empty as error:
+            raise TimeoutError from error
+        if kind == "error":
+            raise value
+        return value
+
+    def close(self) -> None:
+        self._closed = True
+
+
+def create_stdout_reader(stdout: Any) -> McpStdoutReader:
+    """Select the subprocess-pipe implementation for the current platform."""
+
+    if os.name == "nt":
+        return ThreadedStdoutReader(stdout)
+    return SelectorStdoutReader(stdout)
+
+
 class McpStdioClient:
     """Own one MCP server process and issue serialized JSON-RPC requests."""
 
@@ -52,6 +125,7 @@ class McpStdioClient:
         project_root: str | Path | None = None,
         timeout: float = 10.0,
         process_factory: ProcessFactory | None = None,
+        stdout_reader_factory: Callable[[Any], McpStdoutReader] | None = None,
     ) -> None:
         if not isinstance(backend_url, str) or not backend_url.strip():
             raise ValueError("backend_url must be a non-empty string")
@@ -62,7 +136,9 @@ class McpStdioClient:
         self.project_root = Path(project_root or Path(__file__).resolve().parents[1]).resolve()
         self.timeout = timeout
         self._process_factory = process_factory or subprocess.Popen
+        self._stdout_reader_factory = stdout_reader_factory or create_stdout_reader
         self._process: Any | None = None
+        self._stdout_reader: McpStdoutReader | None = None
         self._next_id = 1
         self._lock = Lock()
 
@@ -96,6 +172,7 @@ class McpStdioClient:
                     bufsize=1,
                 )
                 self._process = process
+                self._stdout_reader = self._stdout_reader_factory(process.stdout)
                 initialize_request = {
                     "jsonrpc": "2.0",
                     "id": initialize_id,
@@ -342,27 +419,22 @@ class McpStdioClient:
 
     def _read_response(self) -> dict[str, Any]:
         process = self._process
-        if process is None or process.stdout is None:
+        reader = self._stdout_reader
+        if process is None or process.stdout is None or reader is None:
             raise self._unavailable_error()
-        selector = selectors.DefaultSelector()
         try:
-            selector.register(process.stdout, selectors.EVENT_READ)
-            if not selector.select(self.timeout):
-                raise McpClientError(
-                    "MCP_TIMEOUT",
-                    "MCP server did not respond before the timeout.",
-                    status=504,
-                    retryable=True,
-                )
-            raw = process.stdout.readline()
-        except McpClientError:
-            raise
+            raw = reader.read_line(self.timeout)
+        except TimeoutError as error:
+            raise McpClientError(
+                "MCP_TIMEOUT",
+                "MCP server did not respond before the timeout.",
+                status=504,
+                retryable=True,
+            ) from error
         except (OSError, ValueError) as error:
             raise self._unavailable_error(
                 details={"type": type(error).__name__, "message": str(error)},
             ) from error
-        finally:
-            selector.close()
         if raw == "":
             raise self._protocol_error("MCP server closed stdout unexpectedly.")
         try:
@@ -421,7 +493,9 @@ class McpStdioClient:
 
     def _stop_process(self) -> None:
         process = self._process
+        reader = self._stdout_reader
         self._process = None
+        self._stdout_reader = None
         if process is None:
             return
         try:
@@ -444,3 +518,5 @@ class McpStdioClient:
                 process.stdout.close()
         except (OSError, ValueError):
             pass
+        if reader is not None:
+            reader.close()
