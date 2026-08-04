@@ -360,7 +360,7 @@ node --check frontend/interaction-view.js
 
 Expected: PASS for the task lifecycle contracts and existing friendly-renderer contracts. The full `tests.test_frontend_static` suite runs after Task 4 updates the HTML and app wiring.
 
-- [ ] **Step 7: Commit the task renderer**
+- [x] **Step 7: Commit the task renderer**
 
 ```bash
 git add frontend/interaction-view.js tests/test_frontend_static.py
@@ -378,7 +378,7 @@ git commit -m "feat: render collapsible task workspace"
 - Consumes: Task 3 view methods `startTask`, `updateTask`, `continueTask`, and `failTask`.
 - Produces: message requests that create tasks, actions that continue active tasks, and a single `task-list` workspace root.
 
-- [ ] **Step 1: Replace the static task roots with one task-list root**
+- [x] **Step 1: Replace the static task roots with one task-list root**
 
 In `frontend/index.html`, replace the current `task-summary`, `task-steps`, `task-content`, and `action-list` elements with:
 
@@ -388,7 +388,7 @@ In `frontend/index.html`, replace the current `task-summary`, `task-steps`, `tas
 
 Keep the workspace heading, visible-execution promise, health status, global error, human help and all conversation/input controls.
 
-- [ ] **Step 2: Pass task-list root to the interaction view**
+- [x] **Step 2: Pass task-list root to the interaction view**
 
 In `frontend/app.js`, replace `stepsRoot`, `taskRoot`, `actionsRoot`, and `stateRoot` with:
 
@@ -398,7 +398,7 @@ taskListRoot: byId("task-list"),
 
 Keep `conversationRoot`, `healthRoot`, `errorRoot`, and `onAction`.
 
-- [ ] **Step 3: Start and update tasks for messages**
+- [x] **Step 3: Start and update tasks for messages**
 
 In `sendMessage`, after appending the user message and before the network request, add:
 
@@ -419,7 +419,7 @@ speech.speak(response.assistant_message);
 
 On error, call `view.failTask(taskId, error)` before `handleError(error)`.
 
-- [ ] **Step 4: Continue the active task for UI actions**
+- [x] **Step 4: Continue the active task for UI actions**
 
 Change `handleAction(action, taskId = null)` to use the supplied task ID or the app’s `activeTaskId`. If neither exists (for example, the footer human-help action is clicked before any message), start a UI task first; otherwise call `continueTask`. Before `client.sendAction`, call:
 
@@ -436,11 +436,11 @@ if (!taskId) {
 
 Update the same task with `view.updateTask(taskId, response)`. On failure, call `view.failTask(taskId, error)` and preserve the global error alert. Do not change the outgoing action name or payload.
 
-- [ ] **Step 5: Keep future LLM continuation routing isolated**
+- [x] **Step 5: Keep future LLM continuation routing isolated**
 
 Keep the current `sendMessage` behavior of starting a new task, but ensure the task ID is explicit at the view boundary. Add a comment-free, callable view method `continueTask` (already implemented in Task 3) so a later input router can call it without changing task-card rendering. Do not add a new backend endpoint or fake `task_id` field in this task.
 
-- [ ] **Step 6: Run static and syntax checks**
+- [x] **Step 6: Run static and syntax checks**
 
 Run:
 

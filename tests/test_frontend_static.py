@@ -56,7 +56,7 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertNotIn('class="mode-badge"', html)
         self.assertNotIn("mcp medical.list_departments {}", html)
         self.assertIn('id="speech-status"', html)
-        self.assertIn('id="action-list"', html)
+        self.assertIn('id="task-list"', html)
 
     def test_frontend_supports_diagnostic_confirmation_action(self):
         self.assertIn(

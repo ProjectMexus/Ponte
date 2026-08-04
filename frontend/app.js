@@ -20,15 +20,13 @@ export function startPonteApp() {
   const speechStatus = byId("speech-status");
   let requestPending = false;
   let inputSource = "text";
+  let activeTaskId = null;
 
   const view = createInteractionView({
     conversationRoot: byId("conversation-list"),
     healthRoot: byId("health-status"),
-    stepsRoot: byId("task-steps"),
-    taskRoot: byId("task-content"),
-    actionsRoot: byId("action-list"),
+    taskListRoot: byId("task-list"),
     errorRoot: byId("global-error"),
-    stateRoot: byId("task-state-label"),
     onAction: handleAction,
   });
 
@@ -78,12 +76,18 @@ export function startPonteApp() {
     view.appendUserMessage(trimmed);
     messageInput.value = "";
     inputSource = "text";
+    const taskId = view.startTask({
+      channel: source,
+      value: trimmed,
+    });
+    activeTaskId = taskId;
     setPending(true);
     try {
       const response = await client.sendMessage({ session_id: sessionId, message: trimmed, source });
-      view.renderResponse(response);
+      view.updateTask(taskId, response);
       speech.speak(response.assistant_message);
     } catch (error) {
+      view.failTask(taskId, error);
       handleError(error);
     } finally {
       setPending(false);
@@ -91,8 +95,18 @@ export function startPonteApp() {
     }
   }
 
-  async function handleAction(action) {
+  async function handleAction(action, taskId = null) {
     if (!action || requestPending) return;
+    taskId = taskId || activeTaskId;
+    if (!taskId) {
+      taskId = view.startTask({ channel: "ui", value: action });
+      activeTaskId = taskId;
+    } else {
+      view.continueTask(taskId, {
+        channel: "ui",
+        value: action,
+      });
+    }
     view.clearError();
     setPending(true);
     try {
@@ -101,9 +115,10 @@ export function startPonteApp() {
         action: action.kind || action.action || action.id,
         payload: action.payload || {},
       });
-      view.renderResponse(response);
+      view.updateTask(taskId, response);
       speech.speak(response.assistant_message);
     } catch (error) {
+      view.failTask(taskId, error);
       handleError(error);
     } finally {
       setPending(false);
