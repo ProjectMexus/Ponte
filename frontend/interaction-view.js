@@ -18,6 +18,66 @@ const STEP_STATUS_LABELS = {
   pending: "稍後進行",
 };
 
+const LOCATION_LABELS = {
+  "LOC-MAIN-OPD": "第一門診",
+  "LOC-IMAGING-CENTER": "影像中心",
+  "LOC-REHAB-01": "復康治療室",
+};
+
+const STEP_LABELS = {
+  load_appointments: "確認現有預約",
+  load_services: "選擇服務",
+  select_service: "選擇服務",
+  search_slots: "查找可預約時段",
+  select_slot: "選擇時段",
+  confirm_appointment: "確認預約",
+  create_appointment: "提交預約",
+  get_task_status: "完成預約",
+};
+
+const STATUS_LABELS = {
+  booked: "已預約",
+  confirmed: "已確認",
+  completed: "已完成",
+  free: "可預約",
+};
+
+const HIDDEN_DATA_KEYS = new Set([
+  "resourceType",
+  "id",
+  "service_id",
+  "slot_id",
+  "department_id",
+  "location_id",
+  "task_id",
+  "task_status",
+  "intent",
+  "intent_source",
+  "booking_source",
+  "tool_name",
+  "step_id",
+  "arguments",
+  "data",
+  "error",
+]);
+
+const FRIENDLY_DATA_LABELS = {
+  plan_name: "計劃",
+  year: "年度",
+  status: "狀態",
+  amount: "金額",
+  currency: "貨幣",
+  payment_status: "發放狀態",
+  scheduled_date: "預定日期",
+  title: "活動",
+  summary: "簡介",
+  district: "地區",
+  name: "名稱",
+  service_center_name: "服務中心",
+  service_type: "服務類別",
+  requested_date: "辦理日期",
+};
+
 function asText(value) {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "boolean") return value ? "是" : "否";
@@ -37,6 +97,48 @@ function displayDate(value) {
   }).format(date);
 }
 
+function locationLabel(value) {
+  if (value && typeof value === "object") {
+    if (value.display) return String(value.display);
+    if (value.name) return String(value.name);
+    value = value.id;
+  }
+  return LOCATION_LABELS[String(value || "")] || "服務地點";
+}
+
+function dateOnly(value) {
+  if (typeof value !== "string") return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("zh-HK", { dateStyle: "medium" }).format(date);
+}
+
+function timeOnly(value) {
+  if (typeof value !== "string") return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("zh-HK", { timeStyle: "short" }).format(date);
+}
+
+function timeRange(value) {
+  const start = timeOnly(value?.start);
+  const end = timeOnly(value?.end);
+  if (start === "—") return end;
+  return end === "—" ? start : [start, end].join("–");
+}
+
+function durationLabel(minutes) {
+  return Number.isFinite(Number(minutes)) ? [minutes, "分鐘"].join(" ") : "—";
+}
+
+function serviceName(service, services = []) {
+  if (service && typeof service === "object") {
+    return String(service.display || service.name || "醫療服務");
+  }
+  const match = services.find((item) => item?.id === service);
+  return String(match?.name || "醫療服務");
+}
+
 function displayLabel(value) {
   return String(value)
     .replaceAll("_", " ")
@@ -50,70 +152,162 @@ function createElement(tag, className, text) {
   return element;
 }
 
-function createDataCard(title, value) {
-  const card = createElement("article", "data-card");
+function createSummaryCard(title, fields, className = "summary-card") {
+  const card = createElement("article", className);
   card.append(createElement("h3", "", title));
-
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const list = createElement("dl");
-    for (const [key, item] of Object.entries(value)) {
+  const list = createElement("dl");
+  (fields || [])
+    .filter((field) => field?.value && field.value !== "—")
+    .forEach((field) => {
       list.append(
-        createElement("dt", "", displayLabel(key)),
-        createElement("dd", "", displayDate(item)),
+        createElement("dt", "", field.label),
+        createElement("dd", "", field.value),
       );
-    }
-    card.append(list);
-  } else {
-    card.append(createElement("p", "", displayDate(value)));
-  }
+    });
+  if (!list.children.length) return null;
+  card.append(list);
   return card;
 }
 
-function renderData(container, data) {
+function slotFields(slot, services) {
+  const fields = [
+    { label: "日期", value: dateOnly(slot?.start) },
+    { label: "時間", value: timeRange(slot) },
+    { label: "服務地點", value: locationLabel(slot?.location || slot?.location_id) },
+  ];
+  const service = services.find((item) => item?.id === slot?.service_id);
+  if (service) {
+    fields.unshift(
+      { label: "服務", value: serviceName(service) },
+      { label: "所需時間", value: durationLabel(service.duration_minutes) },
+    );
+  }
+  return fields;
+}
+
+function renderMedicalData(container, data, response) {
+  const services = Array.isArray(data.services) ? data.services : [];
+  const selectedSlot = data.selected_slot && typeof data.selected_slot === "object" ? data.selected_slot : null;
+  const slots = Array.isArray(data.slots) ? data.slots : [];
+  const appointments = Array.isArray(data.appointments) ? data.appointments : [];
+
+  if (selectedSlot) {
+    const title = response?.task_state === "completed" ? "預約已完成" : "請確認預約資料";
+    const service = services.find((item) => item?.id === data.service_id);
+    const fields = slotFields(selectedSlot, services);
+    if (service && !fields.some((field) => field.label === "所需時間")) {
+      fields.splice(1, 0, { label: "所需時間", value: durationLabel(service.duration_minutes) });
+    }
+    const card = createSummaryCard(title, fields);
+    if (card) container.append(card);
+    return;
+  }
+
+  if (slots.length) {
+    slots.forEach((slot, index) => {
+      const card = createSummaryCard(`可預約時段 ${index + 1}`, slotFields(slot, services));
+      if (card) container.append(card);
+    });
+    return;
+  }
+
+  if (services.length) {
+    services.forEach((service) => {
+      const card = createSummaryCard(serviceName(service), [
+        { label: "所需時間", value: durationLabel(service.duration_minutes) },
+        { label: "服務地點", value: locationLabel(service.location || service.location_id) },
+      ]);
+      if (card) container.append(card);
+    });
+    return;
+  }
+
+  if (appointments.length) {
+    appointments.forEach((appointment, index) => {
+      const card = createSummaryCard(
+        serviceName(appointment.service, services) || `醫療預約 ${index + 1}`,
+        [
+          { label: "日期", value: dateOnly(appointment.start) },
+          { label: "時間", value: timeRange(appointment) },
+          { label: "服務地點", value: locationLabel(appointment.location) },
+          { label: "狀態", value: STATUS_LABELS[appointment.status] || "已登記" },
+        ],
+      );
+      if (card) container.append(card);
+    });
+    return;
+  }
+
+  if (data.intent === "medical_query") {
+    container.append(createElement("div", "empty-workspace", "目前沒有已預約的醫療服務。"));
+  }
+}
+
+function friendlyScalarValue(key, value) {
+  if (key.includes("date")) return dateOnly(String(value));
+  return displayDate(value);
+}
+
+function collectFriendlyFields(value, fields = []) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectFriendlyFields(item, fields));
+    return fields;
+  }
+  if (!value || typeof value !== "object") return fields;
+
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      HIDDEN_DATA_KEYS.has(key)
+      || key.endsWith("_id")
+      || item === null
+      || item === undefined
+    ) continue;
+    if (typeof item === "object") {
+      collectFriendlyFields(item, fields);
+      continue;
+    }
+    if (FRIENDLY_DATA_LABELS[key]) {
+      fields.push({ label: FRIENDLY_DATA_LABELS[key], value: friendlyScalarValue(key, item) });
+    }
+  }
+  return fields;
+}
+
+function renderFriendlyData(container, data) {
+  const fields = collectFriendlyFields(data);
+  const card = createSummaryCard("服務資料", fields);
+  if (card) container.append(card);
+}
+
+function renderData(container, data, response) {
   if (!data || typeof data !== "object" || Object.keys(data).length === 0) {
     container.append(createElement("div", "empty-workspace", "完成這一步後，相關資料會顯示在這裡。"));
     return;
   }
 
-  for (const [key, value] of Object.entries(data)) {
-    if (Array.isArray(value)) {
-      if (value.length === 0) {
-        container.append(createDataCard(displayLabel(key), "暫時沒有資料"));
-      } else {
-        value.forEach((item, index) => {
-          container.append(createDataCard(`${displayLabel(key)} ${index + 1}`, item));
-        });
-      }
-    } else {
-      container.append(createDataCard(displayLabel(key), value));
-    }
+  if (data.services || data.slots || data.selected_slot || data.appointments || data.intent === "medical_query") {
+    renderMedicalData(container, data, response);
+  } else {
+    renderFriendlyData(container, data);
+  }
+
+  if (!container.children.length) {
+    container.append(createElement("div", "empty-workspace", "完成這一步後，相關資料會顯示在這裡。"));
   }
 }
 
-function renderSteps(container, steps) {
+function renderSteps(container, steps, currentStep) {
   container.replaceChildren();
   (steps || []).forEach((step, index) => {
-    const status = step.status || "pending";
+    const rawStatus = step.status || (step.ok === false ? "failed" : step.ok === true ? "completed" : "pending");
+    const status = rawStatus === "pending" && step.step_id === currentStep ? "current" : rawStatus;
     const item = createElement("li", `task-step is-${status}`);
     item.append(
       createElement("span", "task-step-marker", status === "completed" ? "✓" : String(index + 1)),
-      createElement("span", "task-step-label", step.label || step.id || "服務步驟"),
-      createElement("span", "task-step-status", STEP_STATUS_LABELS[status] || status),
+      createElement("span", "task-step-label", STEP_LABELS[step.step_id] || "服務步驟"),
+      createElement("span", "task-step-status", STEP_STATUS_LABELS[status] || "尚未開始"),
     );
     container.append(item);
-  });
-}
-
-function renderToolEvents(container, toolEvents) {
-  (toolEvents || []).forEach((event) => {
-    const card = createElement("article", "tool-event-card");
-    const status = event.ok === false || event.status === "error" ? "未成功" : "已完成";
-    card.append(
-      createElement("strong", "", event.tool_name || event.tool || "服務工具"),
-      createElement("span", "", status),
-      createElement("span", "tool-event-meta", `步驟：${event.step_id || "—"}　請求編號：${event.request_id || "—"}`),
-    );
-    container.append(card);
   });
 }
 
@@ -136,12 +330,11 @@ function createDateField(label, name, value) {
 }
 
 function slotLabel(slot) {
-  if (slot.label) return asText(slot.label);
-  const start = displayDate(slot.start);
-  const end = displayDate(slot.end);
-  if (start !== "—" && end !== "—") return `${start} — ${end}`;
-  if (start !== "—") return start;
-  return asText(slot.id);
+  const date = dateOnly(slot.start);
+  const range = timeRange(slot);
+  const location = locationLabel(slot.location || slot.location_id);
+  if (date === "—" && range === "—") return "可預約時段";
+  return [date, range, location].filter((value) => value !== "—").join("｜");
 }
 
 const MOCK_REFERRAL_ID = "APT-REF-1";
@@ -154,16 +347,22 @@ function createReferralControl(data) {
   const field = createElement("label", "referral-field");
   field.append(createElement("span", "date-field-label", "關聯門診／轉介編號"));
 
-  const appointmentIds = (Array.isArray(data.appointments) ? data.appointments : [])
-    .map((appointment) => appointment?.id)
-    .filter((id) => typeof id === "string" && id.trim());
+  const appointmentOptions = (Array.isArray(data.appointments) ? data.appointments : [])
+    .map((appointment) => ({
+      id: appointment?.id,
+      label: [
+        serviceName(appointment?.service),
+        dateOnly(appointment?.start),
+      ].join("｜"),
+    }))
+    .filter((option) => typeof option.id === "string" && option.id.trim());
   let control;
-  if (appointmentIds.length > 0) {
+  if (appointmentOptions.length > 0) {
     control = createElement("select");
     control.name = "referring_appointment_id";
-    appointmentIds.forEach((id) => {
-      const option = createElement("option", "", id);
-      option.value = id;
+    appointmentOptions.forEach((appointment) => {
+      const option = createElement("option", "", appointment.label);
+      option.value = appointment.id;
       control.append(option);
     });
   } else {
@@ -193,7 +392,7 @@ function renderConfirmationActions(container, response, onAction) {
   const data = response?.data && typeof response.data === "object" ? response.data : {};
   const referralControl = createReferralControl(data);
   container.append(referralControl.closest("label"));
-  container.append(createElement("p", "field-help", "Mock 測試預設使用 APT-REF-1；如有現有預約可選擇。"));
+  container.append(createElement("p", "field-help", "需要轉介資料才能完成預約。"));
   renderGenericActions(container, response?.actions, onAction, (action) => {
     if (actionKind(action) !== "confirm") return action;
     return {
@@ -221,12 +420,17 @@ function renderActions(container, response, onAction) {
     const choices = createElement("div", "service-choice-list");
     const services = Array.isArray(data.services) ? data.services : [];
     services.forEach((service) => {
-      const serviceName = asText(service.name || service.name_en || service.id);
-      const button = createElement("button", "action-button", serviceName);
+      const serviceNameText = serviceName(service);
+      const label = [
+        serviceNameText,
+        durationLabel(service.duration_minutes),
+        locationLabel(service.location || service.location_id),
+      ].join("｜");
+      const button = createElement("button", "action-button", label);
       button.type = "button";
       button.addEventListener("click", () => onAction({
         kind: "search_slots",
-        label: `搜尋${serviceName}時段`,
+        label: `搜尋${serviceNameText}時段`,
         payload: {
           service_id: service.id,
           date_from: dateFrom.value,
@@ -292,10 +496,9 @@ export function createInteractionView({
   function renderResponse(response) {
     if (response.assistant_message) appendMessage("assistant", response.assistant_message);
     if (stateRoot) stateRoot.textContent = TASK_STATE_LABELS[response.task_state] || response.task_state || TASK_STATE_LABELS.idle;
-    renderSteps(stepsRoot, response.steps);
+    renderSteps(stepsRoot, response.steps, response.current_step);
     taskRoot.replaceChildren();
-    renderData(taskRoot, response.data);
-    renderToolEvents(taskRoot, response.tool_events);
+    renderData(taskRoot, response.data, response);
     renderActions(actionsRoot, response, onAction);
     clearError();
   }
@@ -305,7 +508,7 @@ export function createInteractionView({
     healthRoot.classList.toggle("is-ready", reachable);
     healthRoot.classList.toggle("is-offline", !reachable);
     healthRoot.textContent = reachable
-      ? `服務已連線｜${payload.tool_count || 0} 項能力可用`
+      ? "服務已連線"
       : "服務中心未連線，仍可先使用文字輸入。";
   }
 
