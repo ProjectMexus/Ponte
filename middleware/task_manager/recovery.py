@@ -19,10 +19,12 @@ _RECOVERABLE_CODES = frozenset({
     "MISSING_REQUIRED_FIELD",
     "SCHEDULE_FULL",
     "NO_AVAILABLE_SLOTS",
+    "SLOT_NOT_AVAILABLE",
     "BACKEND_UNAVAILABLE",
     "BACKEND_TIMEOUT",
 })
 _TRANSIENT_CODES = frozenset({"BACKEND_UNAVAILABLE", "BACKEND_TIMEOUT"})
+_SUBMIT_CONFLICT_CODES = frozenset({"DUPLICATE_BOOKING"})
 
 
 def build_recovery_plan(
@@ -42,7 +44,9 @@ def build_recovery_plan(
         return _availability_plan(error, data)
     if code == "MISSING_REQUIRED_FIELD":
         return _missing_information_plan(error)
-    if code in {"SCHEDULE_FULL", "NO_AVAILABLE_SLOTS"}:
+    if code in _SUBMIT_CONFLICT_CODES:
+        return _booking_conflict_plan(data)
+    if code in {"SCHEDULE_FULL", "NO_AVAILABLE_SLOTS", "SLOT_NOT_AVAILABLE"}:
         return _availability_plan(error, data)
     if code in _TRANSIENT_CODES and retryable:
         return _temporary_failure_plan(code)
@@ -90,6 +94,23 @@ def _missing_information_plan(error: Mapping[str, Any] | None) -> RecoveryPlan:
     )
 
 
+def _booking_conflict_plan(data: Mapping[str, Any]) -> RecoveryPlan:
+    options: list[RecoveryOption] = []
+    search_option = _same_service_search_option(data)
+    if search_option.payload.get("service_id") and search_option.payload.get("date_from") and search_option.payload.get("date_to"):
+        options.append(search_option)
+    options.extend([
+        RecoveryOption("cancel", "取消這次預約", {}),
+        RecoveryOption("human_help", "轉接人工協助", {}),
+    ])
+    return RecoveryPlan(
+        category="booking_conflict",
+        reason_code="DUPLICATE_BOOKING",
+        explanation="你已有同一時間的有效預約，這個時段不能再預約；可以重新查找其他可預約時段，或選擇其他協助方式。",
+        options=tuple(options),
+    )
+
+
 def _availability_plan(
     error: Mapping[str, Any] | None,
     data: Mapping[str, Any],
@@ -99,18 +120,37 @@ def _availability_plan(
     if not isinstance(candidates, list):
         candidates = details.get("available_slots")
     options = _alternative_options(candidates, data)
+    reason_code = _error_code(error) or "NO_AVAILABLE_SLOTS"
+    if reason_code == "SLOT_NOT_AVAILABLE":
+        options.insert(0, _same_service_search_option(data))
     if not options:
         options = [RecoveryOption("retry", "重新搜尋", {})]
     options.append(RecoveryOption("cancel", "取消這次預約", {}))
-    reason_code = _error_code(error) or "NO_AVAILABLE_SLOTS"
-    if reason_code not in {"SCHEDULE_FULL", "NO_AVAILABLE_SLOTS"}:
+    if reason_code not in {"SCHEDULE_FULL", "NO_AVAILABLE_SLOTS", "SLOT_NOT_AVAILABLE"}:
         reason_code = "NO_AVAILABLE_SLOTS"
+    explanation = (
+        "剛才選擇的時段已被其他預約佔用，請重新搜尋其他可預約時段。"
+        if reason_code == "SLOT_NOT_AVAILABLE"
+        else "目前選擇的服務和日期範圍沒有可預約名額。"
+    )
     return RecoveryPlan(
         category="availability",
         reason_code=reason_code,
-        explanation="目前選擇的服務和日期範圍沒有可預約名額。",
+        explanation=explanation,
         options=tuple(options),
     )
+
+
+def _same_service_search_option(data: Mapping[str, Any]) -> RecoveryOption:
+    payload: dict[str, Any] = {}
+    service_id = data.get("service_id")
+    if isinstance(service_id, str) and service_id.strip():
+        payload["service_id"] = service_id.strip()
+    for key in ("date_from", "date_to"):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            payload[key] = value.strip()
+    return RecoveryOption("search_slots", "重新搜尋其他可預約時段", payload)
 
 
 def _alternative_options(value: Any, data: Mapping[str, Any]) -> list[RecoveryOption]:

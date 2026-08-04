@@ -382,7 +382,11 @@ class InteractionController:
             include_idempotency=True,
         )
         if not create_result.ok:
-            return build_response(state, "預約提交未成功，請稍後再試。", [])
+            return build_response(
+                state,
+                _recovery_message(state, "預約提交未成功，請稍後再試。"),
+                [],
+            )
         task_id = self._task_id(create_result)
         if task_id is None:
             self._set_error(
@@ -403,7 +407,11 @@ class InteractionController:
         )
         status_data = self._result_data(state, status_result, "get_task_status")
         if status_data is None or not isinstance(status_data, Mapping):
-            return build_response(state, "預約任務狀態暫時無法確認，請稍後再試。", [])
+            return build_response(
+                state,
+                _recovery_message(state, "預約任務狀態暫時無法確認，請稍後再試。"),
+                [],
+            )
         status = status_data.get("status")
         if not isinstance(status, str) or not status:
             self._set_error(
@@ -450,7 +458,11 @@ class InteractionController:
                             manager.request_user_input(plan)
                 else:
                     manager.transition("querying", call.step_id)
-        return build_response(state, "已重試上一個查詢。" if result.ok else "重試查詢仍未成功，請稍後再試。", [])
+        return build_response(
+            state,
+            "已重試上一個查詢。" if result.ok else _recovery_message(state, "重試查詢仍未成功，請稍後再試。"),
+            [],
+        )
 
     def _run_tool(
         self,
@@ -598,3 +610,12 @@ def _task_state(status: str) -> str:
     if normalized in {"completed", "complete", "succeeded", "success"}:
         return "completed"
     return normalized
+
+
+def _recovery_message(state: SessionState, fallback: str) -> str:
+    recovery = state.recovery
+    if isinstance(recovery, Mapping):
+        explanation = recovery.get("explanation")
+        if isinstance(explanation, str) and explanation.strip():
+            return explanation
+    return fallback

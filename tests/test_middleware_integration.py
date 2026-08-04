@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
 
-from MCP.errors import BackendTimeout
+from MCP.errors import AdapterError, BackendTimeout
 from middleware.intent import KeywordIntentRecognizer
 from middleware.server import create_application, create_http_server
 from mock_backends.server import create_http_server as create_backend_http_server
@@ -203,6 +203,33 @@ class FailingOnceMcpClient:
         raise AssertionError(name)
 
 
+class DuplicateBookingMcpClient(FailingOnceMcpClient):
+    def call_tool(self, name, arguments):
+        del arguments
+        self.calls.append(name)
+        if name == "medical.get_my_appointments":
+            return {"request_id": "REQ-DUPLICATE-1", "data": []}
+        if name == "medical.list_appointment_services":
+            return {
+                "request_id": "REQ-DUPLICATE-2",
+                "data": [{"id": "SERVICE-US-001", "name": "超聲波檢查", "duration_minutes": 30}],
+            }
+        if name == "medical.search_appointment_slots":
+            return {
+                "request_id": "REQ-DUPLICATE-3",
+                "data": [{"id": "SLOT-US-20260812-1400", "start": "2026-08-12T14:00:00+08:00"}],
+            }
+        if name == "medical.create_appointment":
+            raise AdapterError(
+                "DUPLICATE_BOOKING",
+                "RAW BACKEND CONFLICT MESSAGE",
+                status=409,
+                details={"message": "RAW BACKEND CONFLICT MESSAGE"},
+                retryable=False,
+            )
+        raise AssertionError(name)
+
+
 class MiddlewareRecoveryIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.mcp_client = FailingOnceMcpClient()
@@ -257,6 +284,62 @@ class MiddlewareRecoveryIntegrationTests(unittest.TestCase):
             ["load_appointments", "load_services", "search_slots", "search_slots"],
         )
         self.assertEqual(self.mcp_client.slot_attempts, 2)
+
+    def test_same_task_exposes_recovery_after_mcp_duplicate_booking(self):
+        self.middleware.shutdown()
+        self.middleware.server_close()
+        self.mcp_client = DuplicateBookingMcpClient()
+        self.application = create_application(
+            "http://backend.test",
+            "PAT-DEMO-001",
+            "Bearer mock-user-token",
+            mcp_client=self.mcp_client,
+            intent_recognizer=KeywordIntentRecognizer(),
+        )
+        self.middleware = create_http_server("127.0.0.1", 0, self.application)
+        self.middleware_thread = threading.Thread(target=self.middleware.serve_forever, daemon=True)
+        self.middleware_thread.start()
+
+        base_url = f"http://127.0.0.1:{self.middleware.server_port}"
+        booking = post_json(
+            self.opener,
+            f"{base_url}/api/interactions/message",
+            {"session_id": "S-DUPLICATE-HTTP", "message": "我想預約醫療服務", "source": "text"},
+        )
+        post_json(
+            self.opener,
+            f"{base_url}/api/interactions/action",
+            {
+                "session_id": "S-DUPLICATE-HTTP",
+                "action": "search_slots",
+                "payload": {
+                    "service_id": booking["data"]["services"][0]["id"],
+                    "date_from": "2026-08-10",
+                    "date_to": "2026-08-14",
+                },
+            },
+        )
+        post_json(
+            self.opener,
+            f"{base_url}/api/interactions/action",
+            {
+                "session_id": "S-DUPLICATE-HTTP",
+                "action": "select_slot",
+                "payload": {"slot_id": "SLOT-US-20260812-1400"},
+            },
+        )
+        failed = post_json(
+            self.opener,
+            f"{base_url}/api/interactions/action",
+            {"session_id": "S-DUPLICATE-HTTP", "action": "confirm", "payload": {}},
+        )
+
+        self.assertEqual(failed["task_state"], "awaiting_user_input")
+        self.assertEqual(failed["recovery"]["reason_code"], "DUPLICATE_BOOKING")
+        self.assertIn("其他可預約時段", failed["recovery"]["explanation"])
+        self.assertIn("search_slots", [action["kind"] for action in failed["actions"]])
+        self.assertNotIn("RAW BACKEND CONFLICT MESSAGE", str(failed))
+        self.assertEqual(failed["data"]["service_id"], "SERVICE-US-001")
 
 
 if __name__ == "__main__":

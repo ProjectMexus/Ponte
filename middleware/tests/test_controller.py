@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from middleware.contracts import InteractionActionRequest, InteractionRequest, ToolExecutionResult
@@ -86,6 +87,27 @@ class EmptySlotsPipeline(RecordingPipeline):
         if call.name == "medical.search_appointment_slots":
             self.calls.append(call)
             return ToolExecutionResult(call.name, call.step_id, True, "REQ-EMPTY", {"data": []}, None)
+        return super().dispatch(call)
+
+
+class DuplicateBookingOnConfirmPipeline(RecordingPipeline):
+    def dispatch(self, call):
+        if call.name == "medical.create_appointment":
+            self.calls.append(call)
+            return ToolExecutionResult(
+                call.name,
+                call.step_id,
+                False,
+                "REQ-DUPLICATE-BOOKING",
+                None,
+                {
+                    "code": "DUPLICATE_BOOKING",
+                    "message": "同一病人已有衝突的有效預約。",
+                    "status": 409,
+                    "details": {"message": "同一病人已有衝突的有效預約。"},
+                    "retryable": False,
+                },
+            )
         return super().dispatch(call)
 
 
@@ -320,6 +342,45 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(response["task_state"], "awaiting_user_input")
         self.assertEqual(response["recovery"]["reason_code"], "NO_AVAILABLE_SLOTS")
         self.assertIn("沒有可預約名額", response["assistant_message"])
+
+    def test_duplicate_booking_submit_returns_safe_recovery_actions(self):
+        pipeline = DuplicateBookingOnConfirmPipeline()
+        controller = InteractionController(
+            pipeline,
+            SessionStore(),
+            "PAT-DEMO-001",
+            "Bearer mock-user-token",
+            intent_recognizer=KeywordIntentRecognizer(),
+        )
+        controller.handle_message(InteractionRequest("S-DUPLICATE", "我想預約醫療服務"))
+        controller.handle_action(InteractionActionRequest("S-DUPLICATE", "search_slots", {
+            "service_id": "SERVICE-US-001",
+            "date_from": "2026-08-10",
+            "date_to": "2026-08-14",
+        }))
+        controller.handle_action(InteractionActionRequest("S-DUPLICATE", "select_slot", {
+            "slot_id": "SLOT-US-20260812-1400",
+        }))
+
+        response = controller.handle_action(InteractionActionRequest("S-DUPLICATE", "confirm", {}))
+
+        self.assertEqual(response["task_state"], "awaiting_user_input")
+        self.assertEqual(response["recovery"]["reason_code"], "DUPLICATE_BOOKING")
+        self.assertIn("不能再預約", response["assistant_message"])
+        self.assertEqual(
+            {action["kind"] for action in response["actions"]},
+            {"search_slots", "cancel", "human_help"},
+        )
+        self.assertNotIn("同一病人已有衝突的有效預約。", json.dumps(response, ensure_ascii=False))
+
+        search_option = next(
+            action for action in response["actions"] if action["kind"] == "search_slots"
+        )
+        continued = controller.handle_action(
+            InteractionActionRequest("S-SLOT-RACE", "search_slots", search_option["payload"])
+        )
+        self.assertEqual(continued["task_state"], "selecting_slot")
+        self.assertEqual(continued["data"]["service_id"], "SERVICE-US-001")
 
     def test_invalid_backend_response_remains_hard_failed(self):
         pipeline = InvalidAppointmentsPipeline()

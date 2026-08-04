@@ -22,7 +22,7 @@ from .execution import ExecutionPipeline, McpExecutionStage
 from .intent import IntentRecognizer
 from .mcp_client import McpStdioClient
 from .session import SessionStore
-from .task_manager.interpreter import TaskRecoveryInterpreter
+from .task_manager.interpreter import TaskRecoveryInterpreter, build_task_recovery_interpreter
 
 
 class ClientRequestError(Exception):
@@ -70,7 +70,7 @@ class MiddlewareApplication:
             intent_recognizer=intent_recognizer,
             mock_user_id=mock_user_id,
             registry=self.registry,
-            recovery_interpreter=recovery_interpreter,
+            recovery_interpreter=recovery_interpreter or build_task_recovery_interpreter(),
         )
 
     def close(self) -> None:
