@@ -144,6 +144,34 @@ Ponte 必須同步展示：
                 └─────────────────────────────┘
 ```
 
+## 3.1 Task Workspace 與對話輸入
+
+Frontend 的服務工作區以獨立任務卡片呈現，而不是用一個共享區域覆蓋上一個 response。每次新的高階需求會建立一個 UI task；後續選擇服務、選擇時段、確認或其他輸入會更新同一個 task。任務完成、取消、失敗或轉交人工後保留在工作區並自動收合，最新執行中的 task 則展開顯示 steps、摘要資料及下一步操作。
+
+```text
+文字／語音／UI action
+          │
+          ▼
+       TaskInput
+          │
+          ▼
+Interaction Controller / Workflow
+          │
+          ▼
+       TaskResponse
+          │
+          ▼
+Frontend Task Workspace
+  ├─ task history
+  ├─ visible steps
+  ├─ friendly data summaries
+  └─ next actions
+```
+
+`TaskInput` 的輸入通道可以是 `text`、`voice` 或 `ui`，並可帶有可選 `task_id`。目前 frontend 使用 local task ID，middleware response 未來可以提供 backend／LLM task ID；任務路由接口因此不把「繼續任務」綁定在 button click 上。這讓未來的 LLM 對話可以在使用者說出「確認」「改下午」或補充資料時，繼續目前等待中的 task。
+
+Frontend 只負責任務歷史和用戶版投影；Workflow Orchestrator 仍負責流程順序、確認節點、工具權限和實際執行。新的高階需求開始時，middleware 會清理上一個 `SessionState` workflow 的 transient data、steps、tool events、retry call 和 confirmation record，但不會刪除已建立的 mock appointment、durable task 或 receipt。UI task history 與 durable backend task 是兩個互補層次：前者服務於本次對話的可理解工作區，後者負責業務狀態和長時間追蹤。
+
 ------
 
 # 4. 核心架構決策
