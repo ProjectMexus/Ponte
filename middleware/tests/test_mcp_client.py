@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import threading
 import unittest
 
@@ -111,7 +112,8 @@ class McpStdioClientTests(unittest.TestCase):
         process = FakeProcess([initialize_response()])
         client = self.make_client(process)
 
-        client.start()
+        with self.assertLogs("ponte", level="INFO") as captured:
+            client.start()
 
         self.assertEqual(json.loads(process.writes[0])["method"], "initialize")
         self.assertEqual(
@@ -119,6 +121,15 @@ class McpStdioClientTests(unittest.TestCase):
             "notifications/initialized",
         )
         self.assertEqual(process.kwargs["env"]["PONTE_BACKEND_URL"], "http://127.0.0.1:8080")
+        self.assertIs(process.kwargs["stderr"], subprocess.DEVNULL)
+        output = "\n".join(captured.output)
+        self.assertIn("operation=initialize", output)
+        self.assertIn("request_id=MCP-1", output)
+        self.assertIn("input_keys=capabilities,clientInfo,protocolVersion", output)
+        self.assertIn("outcome=success", output)
+        self.assertIn("latency_ms=", output)
+        self.assertNotIn('"jsonrpc"', output)
+        self.assertNotIn("2025-03-26", output)
 
     def test_call_tool_returns_structured_content(self):
         process = FakeProcess([
@@ -137,10 +148,30 @@ class McpStdioClientTests(unittest.TestCase):
         ])
         client = self.make_client(process)
 
-        result = client.call_tool("medical.list_departments", {"context": {}, "input": {}})
+        with self.assertLogs("ponte", level="INFO") as captured:
+            result = client.call_tool(
+                "medical.list_departments",
+                {
+                    "context": {"authorization": "PATIENT_SECRET"},
+                    "input": {"marker": "PATIENT_INPUT_SECRET"},
+                },
+            )
 
         self.assertEqual(result, {"request_id": "REQ-1", "data": {"departments": []}})
         self.assertEqual(json.loads(process.writes[2])["params"]["name"], "medical.list_departments")
+        output = "\n".join(captured.output)
+        self.assertIn("operation=tools/call", output)
+        self.assertIn("request_id=2", output)
+        self.assertIn("tool=medical.list_departments", output)
+        self.assertIn("input_keys=context,input", output)
+        self.assertIn("outcome=success", output)
+        self.assertIn("latency_ms=", output)
+        self.assertNotIn("PATIENT_SECRET", output)
+        self.assertNotIn("PATIENT_INPUT_SECRET", output)
+        self.assertNotIn('"jsonrpc"', output)
+        self.assertNotIn("arguments=", output)
+        self.assertNotIn("response=", output)
+        self.assertNotIn("details=", output)
 
     def test_call_tool_maps_mcp_tool_error_to_adapter_error(self):
         process = FakeProcess([
@@ -163,11 +194,58 @@ class McpStdioClientTests(unittest.TestCase):
         ])
         client = self.make_client(process)
 
-        with self.assertRaises(AdapterError) as raised:
-            client.call_tool("medical.create_registration", {"context": {}, "input": {}})
+        with self.assertLogs("ponte", level="INFO") as captured:
+            with self.assertRaises(AdapterError) as raised:
+                client.call_tool(
+                    "medical.create_registration",
+                    {
+                        "context": {},
+                        "input": {"marker": "PATIENT_SECRET"},
+                    },
+                )
 
         self.assertEqual(raised.exception.code, "SLOT_NOT_AVAILABLE")
         self.assertEqual(raised.exception.status, 409)
+        output = "\n".join(captured.output)
+        self.assertIn("operation=tools/call", output)
+        self.assertIn("request_id=2", output)
+        self.assertIn("tool=medical.create_registration", output)
+        self.assertIn("input_keys=context,input", output)
+        self.assertIn("outcome=error", output)
+        self.assertIn("error_code=SLOT_NOT_AVAILABLE", output)
+        self.assertIn("latency_ms=", output)
+        self.assertNotIn("PATIENT_SECRET", output)
+        self.assertNotIn("所選時段已滿", output)
+        self.assertNotIn('"jsonrpc"', output)
+        self.assertNotIn("arguments=", output)
+        self.assertNotIn("response=", output)
+        self.assertNotIn("details=", output)
+
+    def test_start_logs_unexpected_error_type_without_exception_message(self):
+        def failing_factory(*args, **kwargs):
+            del args, kwargs
+            raise RuntimeError("PATIENT_STARTUP_SECRET")
+
+        client = McpStdioClient(
+            "http://127.0.0.1:8080",
+            project_root=os.getcwd(),
+            process_factory=failing_factory,
+        )
+        self.addCleanup(client.close)
+
+        with self.assertLogs("ponte", level="INFO") as captured:
+            with self.assertRaises(RuntimeError):
+                client.start()
+
+        output = "\n".join(captured.output)
+        self.assertIn("operation=initialize", output)
+        self.assertIn("request_id=MCP-1", output)
+        self.assertIn("outcome=error", output)
+        self.assertIn("error_type=RuntimeError", output)
+        self.assertIn("latency_ms=", output)
+        self.assertNotIn("PATIENT_STARTUP_SECRET", output)
+        self.assertNotIn('"jsonrpc"', output)
+        self.assertNotIn("details=", output)
 
     def test_client_rejects_malformed_response(self):
         process = FakeProcess([initialize_response(), "not-json"])

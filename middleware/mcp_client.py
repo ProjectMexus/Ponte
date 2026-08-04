@@ -7,12 +7,14 @@ import os
 import selectors
 import subprocess
 import sys
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from threading import Lock
 from typing import Any, Callable
 
 from MCP.errors import AdapterError
+from ponte_logging import log_event
 
 
 ProcessFactory = Callable[..., Any]
@@ -79,6 +81,9 @@ class McpStdioClient:
             command = [self.python_executable, "-m", "MCP"]
             environment = os.environ.copy()
             environment["PONTE_BACKEND_URL"] = self.backend_url
+            initialize_id = self._next_id
+            initialize_request_id = f"MCP-{initialize_id}"
+            started_at = time.monotonic()
             try:
                 process = self._process_factory(
                     command,
@@ -91,10 +96,17 @@ class McpStdioClient:
                     bufsize=1,
                 )
                 self._process = process
+                log_event(
+                    "mcp",
+                    "send",
+                    request_id=initialize_request_id,
+                    operation="initialize",
+                    input_keys="capabilities,clientInfo,protocolVersion",
+                )
                 response = self._request(
                     {
                         "jsonrpc": "2.0",
-                        "id": self._next_id,
+                        "id": initialize_id,
                         "method": "initialize",
                         "params": {
                             "protocolVersion": "2025-03-26",
@@ -102,7 +114,7 @@ class McpStdioClient:
                             "clientInfo": {"name": "ponte-middleware", "version": "0.1.0"},
                         },
                     },
-                    expected_id=self._next_id,
+                    expected_id=initialize_id,
                 )
                 self._next_id += 1
                 result = response.get("result")
@@ -115,10 +127,36 @@ class McpStdioClient:
                     "jsonrpc": "2.0",
                     "method": "notifications/initialized",
                 })
-            except AdapterError:
+                log_event(
+                    "mcp",
+                    "receive",
+                    request_id=initialize_request_id,
+                    operation="initialize",
+                    outcome="success",
+                    latency_ms=self._latency_ms(started_at),
+                )
+            except AdapterError as error:
+                log_event(
+                    "mcp",
+                    "error",
+                    request_id=initialize_request_id,
+                    operation="initialize",
+                    outcome="error",
+                    error_code=error.code,
+                    latency_ms=self._latency_ms(started_at),
+                )
                 self._stop_process()
                 raise
             except (OSError, ValueError, TypeError) as error:
+                log_event(
+                    "mcp",
+                    "error",
+                    request_id=initialize_request_id,
+                    operation="initialize",
+                    outcome="error",
+                    error_type=type(error).__name__,
+                    latency_ms=self._latency_ms(started_at),
+                )
                 self._stop_process()
                 raise McpClientError(
                     "MCP_UNAVAILABLE",
@@ -127,6 +165,18 @@ class McpStdioClient:
                     details={"type": type(error).__name__, "message": str(error)},
                     retryable=True,
                 ) from error
+            except Exception as error:
+                log_event(
+                    "mcp",
+                    "error",
+                    request_id=initialize_request_id,
+                    operation="initialize",
+                    outcome="error",
+                    error_type=type(error).__name__,
+                    latency_ms=self._latency_ms(started_at),
+                )
+                self._stop_process()
+                raise
 
     def call_tool(self, name: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
         """Call one MCP tool and return its structured content."""
@@ -144,7 +194,16 @@ class McpStdioClient:
                 raise self._unavailable_error()
             request_id = self._next_id
             self._next_id += 1
+            started_at = time.monotonic()
             try:
+                log_event(
+                    "mcp",
+                    "send",
+                    request_id=request_id,
+                    operation="tools/call",
+                    tool=name,
+                    input_keys=",".join(sorted(str(key) for key in arguments)),
+                )
                 response = self._request(
                     {
                         "jsonrpc": "2.0",
@@ -154,23 +213,70 @@ class McpStdioClient:
                     },
                     expected_id=request_id,
                 )
+                result = response.get("result")
+                if not isinstance(result, Mapping):
+                    raise self._protocol_error(
+                        "MCP tool response is missing result.",
+                        details={"response": response},
+                    )
+                structured = result.get("structuredContent")
+                if result.get("isError"):
+                    raise self._tool_error(structured)
+                if not isinstance(structured, dict):
+                    raise self._protocol_error(
+                        "MCP tool response is missing structuredContent.",
+                        details={"result": dict(result)},
+                    )
+                log_event(
+                    "mcp",
+                    "receive",
+                    request_id=request_id,
+                    operation="tools/call",
+                    tool=name,
+                    outcome="success",
+                    latency_ms=self._latency_ms(started_at),
+                )
+                return structured
             except BrokenPipeError as error:
-                raise self._unavailable_error() from error
-            result = response.get("result")
-            if not isinstance(result, Mapping):
-                raise self._protocol_error(
-                    "MCP tool response is missing result.",
-                    details={"response": response},
+                unavailable = self._unavailable_error()
+                log_event(
+                    "mcp",
+                    "error",
+                    request_id=request_id,
+                    operation="tools/call",
+                    tool=name,
+                    outcome="error",
+                    error_code=unavailable.code,
+                    latency_ms=self._latency_ms(started_at),
                 )
-            structured = result.get("structuredContent")
-            if result.get("isError"):
-                raise self._tool_error(structured)
-            if not isinstance(structured, dict):
-                raise self._protocol_error(
-                    "MCP tool response is missing structuredContent.",
-                    details={"result": dict(result)},
+                raise unavailable from error
+            except AdapterError as error:
+                log_event(
+                    "mcp",
+                    "error",
+                    request_id=request_id,
+                    operation="tools/call",
+                    tool=name,
+                    outcome="error",
+                    error_code=error.code,
+                    latency_ms=self._latency_ms(started_at),
                 )
-            return structured
+                raise
+            except Exception as error:
+                log_event(
+                    "mcp",
+                    "error",
+                    request_id=request_id,
+                    operation="tools/call",
+                    tool=name,
+                    outcome="error",
+                    error_type=type(error).__name__,
+                    latency_ms=self._latency_ms(started_at),
+                )
+                raise
+
+    def _latency_ms(self, started_at: float) -> float:
+        return round((time.monotonic() - started_at) * 1000, 3)
 
     def close(self) -> None:
         """Stop the MCP child process; safe to call more than once."""
