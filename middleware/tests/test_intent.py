@@ -69,6 +69,74 @@ class IntentTests(unittest.TestCase):
         self.assertEqual(captured["request"].get_header("Authorization"), "Bearer test-key")
         self.assertEqual(captured["timeout"], 8.0)
 
+    def test_llm_recognizer_logs_safe_send_and_receive_summaries(self):
+        secret_message = "PATIENT_SECRET_MESSAGE"
+
+        def transport(request, timeout):
+            return {
+                "choices": [{
+                    "message": {
+                        "content": (
+                            '{"intent":"medical_query","confidence":0.9,'
+                            '"note":"response_secret"}'
+                        ),
+                    },
+                }],
+            }
+
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions",
+            api_key="API_KEY_SECRET",
+            model="test-model",
+            transport=transport,
+        )
+        with self.assertLogs("ponte", level="INFO") as captured:
+            decision = recognizer.recognize(secret_message)
+
+        output = "\n".join(captured.output)
+        self.assertEqual(decision.intent, "medical_query")
+        self.assertIn("[llm]", output)
+        self.assertIn("send", output)
+        self.assertIn("receive", output)
+        self.assertIn("request_id=LLM-", output)
+        self.assertIn("model=test-model", output)
+        self.assertIn("endpoint=llm.example.test/v1/chat/completions", output)
+        self.assertIn("message_count=2", output)
+        self.assertIn(f"message_chars={len(secret_message)}", output)
+        self.assertIn("intent=medical_query", output)
+        self.assertIn("confidence=0.9", output)
+        self.assertRegex(output, r"latency_ms=\d+")
+        self.assertNotIn(secret_message, output)
+        self.assertNotIn("response_secret", output)
+        self.assertNotIn("API_KEY_SECRET", output)
+        self.assertNotIn("Authorization", output)
+        self.assertNotIn("test-key", output)
+
+    def test_llm_recognizer_logs_safe_error_without_exception_message(self):
+        def transport(request, timeout):
+            raise RuntimeError("EXCEPTION_SECRET_MESSAGE")
+
+        recognizer = LlmIntentRecognizer(
+            "https://llm.example.test/v1/chat/completions?api_key=SECRET",
+            api_key="test-key",
+            model="test-model",
+            transport=transport,
+        )
+        with self.assertLogs("ponte", level="INFO") as captured:
+            with self.assertRaises(IntentRecognitionError):
+                recognizer.recognize("PATIENT_SECRET_MESSAGE")
+
+        output = "\n".join(captured.output)
+        self.assertIn("[llm] error", output)
+        self.assertIn("request_id=LLM-", output)
+        self.assertIn("outcome=error", output)
+        self.assertIn("error_code=llm_intent_error", output)
+        self.assertIn("error_type=RuntimeError", output)
+        self.assertRegex(output, r"latency_ms=\d+")
+        self.assertNotIn("EXCEPTION_SECRET_MESSAGE", output)
+        self.assertNotIn("PATIENT_SECRET_MESSAGE", output)
+        self.assertNotIn("SECRET", output)
+
     def test_llm_recognizer_rejects_unsupported_intent(self):
         with self.assertRaises(IntentRecognitionError):
             LlmIntentRecognizer._parse_response({"intent": "passport_renewal"})
@@ -89,11 +157,53 @@ class IntentTests(unittest.TestCase):
     def test_hybrid_recognizer_falls_back_when_llm_fails(self):
         class FailingRecognizer(IntentRecognizer):
             def recognize(self, message):
-                raise IntentRecognitionError("temporary failure")
+                raise IntentRecognitionError("ORIGINAL_FAILURE_SECRET")
 
-        decision = HybridIntentRecognizer(llm=FailingRecognizer()).recognize("我想查詢自己的醫療預約")
+        with self.assertLogs("ponte", level="INFO") as captured:
+            decision = HybridIntentRecognizer(llm=FailingRecognizer()).recognize(
+                "我想查詢自己的醫療預約"
+            )
+
+        output = "\n".join(captured.output)
         self.assertTrue(decision.is_medical_query)
         self.assertEqual(decision.source, "keyword")
+        self.assertIn("[middleware] intent_decision", output)
+        self.assertIn("intent=medical_query", output)
+        self.assertIn("confidence=1", output)
+        self.assertIn("source=keyword", output)
+        self.assertIn("fallback_reason=llm_error", output)
+        self.assertNotIn("ORIGINAL_FAILURE_SECRET", output)
+
+    def test_hybrid_recognizer_logs_unconfigured_fallback(self):
+        with self.assertLogs("ponte", level="INFO") as captured:
+            decision = HybridIntentRecognizer().recognize("你好")
+
+        output = "\n".join(captured.output)
+        self.assertEqual(decision.intent, "general")
+        self.assertIn("[middleware] intent_decision", output)
+        self.assertIn("intent=general", output)
+        self.assertIn("confidence=1", output)
+        self.assertIn("source=keyword", output)
+        self.assertIn("fallback_reason=llm_not_configured", output)
+
+    def test_hybrid_recognizer_logs_llm_source(self):
+        class SuccessfulRecognizer(IntentRecognizer):
+            def recognize(self, message):
+                return LlmIntentRecognizer._parse_response(
+                    {"intent": "cash_sharing", "confidence": 0.75}
+                )
+
+        with self.assertLogs("ponte", level="INFO") as captured:
+            decision = HybridIntentRecognizer(llm=SuccessfulRecognizer()).recognize("SECRET_MESSAGE")
+
+        output = "\n".join(captured.output)
+        self.assertEqual(decision.source, "llm")
+        self.assertIn("[middleware] intent_decision", output)
+        self.assertIn("intent=cash_sharing", output)
+        self.assertIn("confidence=0.75", output)
+        self.assertIn("source=llm", output)
+        self.assertNotIn("SECRET_MESSAGE", output)
+        self.assertNotIn("fallback_reason=", output)
 
     def test_default_builder_uses_keywords_without_llm_url(self):
         with patch.dict("os.environ", {}, clear=True):

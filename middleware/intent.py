@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import json
 import os
+import time
+import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
+
+from ponte_logging import endpoint_label, log_event
 
 
 IntentName = Literal[
@@ -153,6 +157,8 @@ class LlmIntentRecognizer(IntentRecognizer):
     def recognize(self, message: str) -> IntentDecision:
         if not isinstance(message, str) or not message.strip():
             raise ValueError("message must be a non-empty string")
+        request_id = "LLM-" + uuid.uuid4().hex[:12].upper()
+        started_at = time.monotonic()
         request_body = {
             "model": self.model,
             "temperature": 0,
@@ -183,12 +189,48 @@ class LlmIntentRecognizer(IntentRecognizer):
             headers=headers,
             method="POST",
         )
+        log_event(
+            "llm",
+            "send",
+            request_id=request_id,
+            model=self.model,
+            endpoint=endpoint_label(self.api_url),
+            message_count=len(request_body["messages"]),
+            message_chars=len(message),
+        )
         try:
             response = self._transport(request, self.timeout)
-            return self._parse_response(response)
-        except IntentRecognitionError:
+            decision = self._parse_response(response)
+            log_event(
+                "llm",
+                "receive",
+                request_id=request_id,
+                intent=decision.intent,
+                confidence=decision.confidence,
+                latency_ms=round((time.monotonic() - started_at) * 1000),
+            )
+            return decision
+        except IntentRecognitionError as error:
+            log_event(
+                "llm",
+                "error",
+                request_id=request_id,
+                outcome="error",
+                error_code="llm_intent_error",
+                error_type=type(error).__name__,
+                latency_ms=round((time.monotonic() - started_at) * 1000),
+            )
             raise
         except Exception as error:
+            log_event(
+                "llm",
+                "error",
+                request_id=request_id,
+                outcome="error",
+                error_code="llm_intent_error",
+                error_type=type(error).__name__,
+                latency_ms=round((time.monotonic() - started_at) * 1000),
+            )
             raise IntentRecognitionError("LLM intent request failed") from error
 
     def _request_json(self, request: Request, timeout: float) -> Mapping[str, Any]:
@@ -277,10 +319,36 @@ class HybridIntentRecognizer(IntentRecognizer):
     def recognize(self, message: str) -> IntentDecision:
         if self.llm is not None:
             try:
-                return self.llm.recognize(message)
+                decision = self.llm.recognize(message)
             except IntentRecognitionError:
-                pass
-        return self.fallback.recognize(message)
+                decision = self.fallback.recognize(message)
+                log_event(
+                    "middleware",
+                    "intent_decision",
+                    intent=decision.intent,
+                    confidence=decision.confidence,
+                    source="keyword",
+                    fallback_reason="llm_error",
+                )
+                return decision
+            log_event(
+                "middleware",
+                "intent_decision",
+                intent=decision.intent,
+                confidence=decision.confidence,
+                source="llm",
+            )
+            return decision
+        decision = self.fallback.recognize(message)
+        log_event(
+            "middleware",
+            "intent_decision",
+            intent=decision.intent,
+            confidence=decision.confidence,
+            source="keyword",
+            fallback_reason="llm_not_configured",
+        )
+        return decision
 
 
 def build_intent_recognizer() -> IntentRecognizer:
