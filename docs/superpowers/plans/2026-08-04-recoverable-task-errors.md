@@ -33,7 +33,7 @@
 - Consumes: current `SessionState`, `ToolExecutionResult`, `RecordingPipeline`, and controller workflow.
 - Produces: executable regression expectations for `TaskManager`, `RecoveryPlan`, `awaiting_user_input`, empty slots and hard failures.
 
-- [ ] **Step 1: Write transition and response tests**
+- [x] **Step 1: Write transition and response tests**
 
 Add tests that import the planned interfaces and specify the public behavior:
 
@@ -65,7 +65,7 @@ def test_recovery_plan_serializes_safe_options():
 
 Add a `TaskManagerTests` case that calls `request_user_input()` on a `SessionState`, serializes through `build_response()`, and asserts `task_state == "awaiting_user_input"` plus a non-null `recovery` object.
 
-- [ ] **Step 2: Write recovery policy tests**
+- [x] **Step 2: Write recovery policy tests**
 
 Define exact fixtures for the four policy categories:
 
@@ -98,7 +98,7 @@ def test_empty_search_result_returns_availability_plan():
 
 Also assert retryable backend errors contain `retry`, `cancel`, and `human_help` options, while `BACKEND_INVALID_RESPONSE` returns a hard-failure result rather than a recovery plan.
 
-- [ ] **Step 3: Add controller regression tests for same-task recovery**
+- [x] **Step 3: Add controller regression tests for same-task recovery**
 
 Extend `RecordingPipeline` with a sequence-capable fake that returns one failed `medical.search_appointment_slots` result followed by a successful result. Add tests asserting:
 
@@ -114,7 +114,7 @@ self.assertEqual(second["task_state"], "selecting_slot")
 self.assertEqual(second["data"]["service_id"], "SERVICE-US-001")
 ```
 
-- [ ] **Step 4: Run the new tests to confirm the red state**
+- [x] **Step 4: Run the new tests to confirm the red state**
 
 Run:
 
@@ -124,7 +124,7 @@ python -m unittest middleware.tests.test_task_manager middleware.tests.test_reco
 
 Expected: FAIL because `middleware.task_manager` and the new response/recovery behavior do not exist yet.
 
-- [ ] **Step 5: Commit the regression contracts**
+- [x] **Step 5: Commit the regression contracts**
 
 ```powershell
 git add middleware/tests/test_task_manager.py middleware/tests/test_recovery.py middleware/tests/test_controller.py

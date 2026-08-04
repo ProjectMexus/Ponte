@@ -61,6 +61,26 @@ class RecordingPipeline:
         raise AssertionError(call.name)
 
 
+class TimeoutThenSuccessPipeline(RecordingPipeline):
+    def __init__(self):
+        super().__init__()
+        self.slot_attempts = 0
+
+    def dispatch(self, call):
+        if call.name == "medical.search_appointment_slots" and self.slot_attempts == 0:
+            self.calls.append(call)
+            self.slot_attempts += 1
+            return ToolExecutionResult(
+                call.name,
+                call.step_id,
+                False,
+                "REQ-TIMEOUT",
+                None,
+                {"code": "BACKEND_TIMEOUT", "message": "backend timeout", "retryable": True},
+            )
+        return super().dispatch(call)
+
+
 class AlwaysGeneralRecognizer(IntentRecognizer):
     def recognize(self, message):
         return IntentDecision("general", "llm", 0.99)
@@ -242,6 +262,29 @@ class ControllerTests(unittest.TestCase):
         self.assertTrue(create_call.arguments["input"]["consent"])
         self.assertNotIn("confirmation", create_call.arguments["input"])
         self.assertEqual(self.pipeline.calls[-1].name, "medical.get_task_status")
+
+    def test_backend_timeout_keeps_booking_task_open_for_retry(self):
+        pipeline = TimeoutThenSuccessPipeline()
+        controller = InteractionController(
+            pipeline,
+            SessionStore(),
+            "PAT-DEMO-001",
+            "Bearer mock-user-token",
+            intent_recognizer=KeywordIntentRecognizer(),
+        )
+        controller.handle_message(InteractionRequest("S-RECOVER", "我想預約醫療服務"))
+        first = controller.handle_action(InteractionActionRequest("S-RECOVER", "search_slots", {
+            "service_id": "SERVICE-US-001",
+            "date_from": "2026-08-10",
+            "date_to": "2026-08-14",
+        }))
+        self.assertEqual(first["task_state"], "awaiting_user_input")
+        self.assertEqual(first["recovery"]["reason_code"], "BACKEND_TIMEOUT")
+        self.assertIn("retry", [action["kind"] for action in first["actions"]])
+
+        second = controller.handle_action(InteractionActionRequest("S-RECOVER", "retry", {}))
+        self.assertEqual(second["task_state"], "selecting_slot")
+        self.assertEqual(second["data"]["service_id"], "SERVICE-US-001")
 
 
 if __name__ == "__main__":
