@@ -62,6 +62,31 @@ class RecoveryPolicyTests(unittest.TestCase):
         )
         self.assertNotIn("同一病人已有衝突的有效預約。", plan.explanation)
 
+    def test_duplicate_booking_offers_other_available_services(self):
+        plan = build_recovery_plan(
+            error={"code": "DUPLICATE_BOOKING"},
+            step_id="create_appointment",
+            workflow="medical_booking",
+            data={
+                "service_id": "SERVICE-PT-001",
+                "date_from": "2026-08-05",
+                "date_to": "2026-08-19",
+                "services": [
+                    {"id": "SERVICE-US-001", "name": "腹部超聲波檢查"},
+                    {"id": "SERVICE-PT-001", "name": "物理治療"},
+                ],
+            },
+            result_data=None,
+            retryable=False,
+        )
+
+        search_options = [option for option in plan.options if option.action == "search_slots"]
+        self.assertTrue(search_options)
+        self.assertEqual(search_options[0].payload["service_id"], "SERVICE-US-001")
+        self.assertEqual(search_options[0].payload["date_from"], "2026-08-05")
+        self.assertEqual(search_options[0].payload["date_to"], "2026-08-19")
+        self.assertIn("超聲波", search_options[0].label)
+
     def test_slot_taken_during_confirmation_returns_same_service_search_option(self):
         plan = build_recovery_plan(
             error={"code": "SLOT_NOT_AVAILABLE"},
@@ -195,6 +220,10 @@ class RecoveryPolicyTests(unittest.TestCase):
                     "date_to": "2026-08-14",
                     "slot_id": "SLOT-INTERNAL-001",
                     "patient_id": "PATIENT-INTERNAL-001",
+                    "services": [
+                        {"id": "SERVICE-US-001", "name": "腹部超聲波檢查", "patient_id": "PATIENT-INTERNAL-001"},
+                        {"id": "SERVICE-PT-001", "name": "物理治療"},
+                    ],
                 },
                 fallback=None,
             )
@@ -206,6 +235,7 @@ class RecoveryPolicyTests(unittest.TestCase):
         self.assertNotIn("RAW BACKEND MESSAGE", user_context)
         self.assertNotIn("PATIENT-INTERNAL-001", user_context)
         self.assertNotIn("SLOT-INTERNAL-001", user_context)
+        self.assertIn("SERVICE-PT-001", user_context)
         self.assertEqual(captured["headers"]["Authorization"], "Bearer RECOVERY_KEY")
         self.assertTrue(any(call.args[1] == "send" and call.kwargs["operation"] == "task_recovery" for call in log_event.call_args_list))
 

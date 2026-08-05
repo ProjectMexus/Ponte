@@ -9,6 +9,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 from frontend.server import create_http_server as create_frontend_http_server
 from middleware.intent import KeywordIntentRecognizer
 from middleware.server import create_application, create_http_server
+from middleware.task_manager.interpreter import DeterministicTaskRecoveryInterpreter
 from mock_backends.server import create_http_server as create_backend_http_server
 
 
@@ -126,6 +127,135 @@ class FullStackIntegrationTests(unittest.TestCase):
             ["one_account.get_cash_sharing_plan"],
         )
         self.assertEqual(response["data"]["cash_sharing_plan"]["plan"]["year"], 2026)
+
+    def test_duplicate_booking_recovery_offers_other_available_service(self):
+        self.middleware_app.controller.recovery_interpreter = DeterministicTaskRecoveryInterpreter()
+
+        first = self.post_middleware(
+            "/api/interactions/message",
+            {
+                "session_id": "FULL-ALT-FIRST",
+                "message": "我想預約醫療服務",
+                "source": "text",
+            },
+        )
+        physical_therapy = next(
+            service for service in first["data"]["services"] if service["id"] == "SERVICE-PT-001"
+        )
+        self.assertEqual(physical_therapy["name"], "物理治療")
+        first_search = self.post_middleware(
+            "/api/interactions/action",
+            {
+                "session_id": "FULL-ALT-FIRST",
+                "action": "search_slots",
+                "payload": {
+                    "service_id": "SERVICE-PT-001",
+                    "date_from": "2026-08-05",
+                    "date_to": "2026-08-19",
+                },
+            },
+        )
+        first_selected = self.post_middleware(
+            "/api/interactions/action",
+            {
+                "session_id": "FULL-ALT-FIRST",
+                "action": "select_slot",
+                "payload": {"slot_id": first_search["data"]["slots"][0]["id"]},
+            },
+        )
+        self.assertEqual(first_selected["task_state"], "awaiting_confirmation")
+        first_confirmed = self.post_middleware(
+            "/api/interactions/action",
+            {
+                "session_id": "FULL-ALT-FIRST",
+                "action": "confirm",
+                "payload": {"referring_appointment_id": "APT-REF-1"},
+            },
+        )
+        self.assertEqual(first_confirmed["task_state"], "completed")
+
+        second = self.post_middleware(
+            "/api/interactions/message",
+            {
+                "session_id": "FULL-ALT-SECOND",
+                "message": "我想預約醫療服務",
+                "source": "text",
+            },
+        )
+        second_search = self.post_middleware(
+            "/api/interactions/action",
+            {
+                "session_id": "FULL-ALT-SECOND",
+                "action": "search_slots",
+                "payload": {
+                    "service_id": "SERVICE-PT-001",
+                    "date_from": "2026-08-05",
+                    "date_to": "2026-08-19",
+                },
+            },
+        )
+        second_selected = self.post_middleware(
+            "/api/interactions/action",
+            {
+                "session_id": "FULL-ALT-SECOND",
+                "action": "select_slot",
+                "payload": {"slot_id": second_search["data"]["slots"][0]["id"]},
+            },
+        )
+        failed = self.post_middleware(
+            "/api/interactions/action",
+            {
+                "session_id": "FULL-ALT-SECOND",
+                "action": "confirm",
+                "payload": {"referring_appointment_id": "APT-REF-1"},
+            },
+        )
+
+        self.assertEqual(second_selected["task_state"], "awaiting_confirmation")
+        self.assertEqual(failed["recovery"]["reason_code"], "DUPLICATE_BOOKING")
+        alternative = next(
+            action for action in failed["actions"]
+            if action["kind"] == "search_slots"
+            and action["payload"]["service_id"] == "SERVICE-US-001"
+        )
+        self.assertIn("超聲波", alternative["label"])
+
+        continued = self.post_middleware(
+            "/api/interactions/action",
+            {
+                "session_id": "FULL-ALT-SECOND",
+                "action": "search_slots",
+                "payload": alternative["payload"],
+            },
+        )
+        self.assertEqual(continued["task_state"], "selecting_slot")
+        self.assertEqual(continued["data"]["service_id"], "SERVICE-US-001")
+        self.assertEqual(continued["data"]["slots"][0]["service_id"], "SERVICE-US-001")
+
+        us_selected = self.post_middleware(
+            "/api/interactions/action",
+            {
+                "session_id": "FULL-ALT-SECOND",
+                "action": "select_slot",
+                "payload": {"slot_id": continued["data"]["slots"][0]["id"]},
+            },
+        )
+        us_confirmed = self.post_middleware(
+            "/api/interactions/action",
+            {
+                "session_id": "FULL-ALT-SECOND",
+                "action": "confirm",
+                "payload": {"referring_appointment_id": "APT-REF-1"},
+            },
+        )
+        self.assertEqual(us_selected["task_state"], "awaiting_confirmation")
+        self.assertEqual(us_confirmed["task_state"], "completed")
+        create_event = [
+            event for event in us_confirmed["tool_events"]
+            if event["tool_name"] == "medical.create_appointment"
+        ][-1]
+        self.assertTrue(create_event["ok"])
+        self.assertEqual(create_event["arguments"]["input"]["service_id"], "SERVICE-US-001")
 
     def test_natural_language_activity_search_reaches_backend(self):
         response = self.post_middleware(

@@ -143,6 +143,56 @@ class TaskManagerContractTests(unittest.TestCase):
         self.assertNotIn("message", interpreter.calls[0]["error"])
         self.assertNotIn("RAW BACKEND CONFLICT MESSAGE", str(build_response(state, "請選擇下一步。", [])))
 
+    def test_recovery_context_preserves_safe_available_services(self):
+        from middleware.task_manager.manager import TaskManager
+
+        class RecordingInterpreter:
+            def __init__(self):
+                self.calls = []
+
+            def interpret(self, **kwargs):
+                self.calls.append(kwargs)
+                return kwargs["fallback"]
+
+        state = SessionState("S-ALTERNATIVE-MANAGER")
+        state.data.update({
+            "intent": "medical_booking",
+            "service_id": "SERVICE-PT-001",
+            "date_from": "2026-08-05",
+            "date_to": "2026-08-19",
+            "services": [
+                {"id": "SERVICE-US-001", "name": "腹部超聲波檢查", "patient_id": "PATIENT-SECRET"},
+                {"id": "SERVICE-PT-001", "name": "物理治療"},
+            ],
+        })
+        interpreter = RecordingInterpreter()
+        manager = TaskManager(state, interpreter)
+        manager.transition("awaiting_confirmation", "confirm_appointment")
+        manager.transition("submitting", "create_appointment")
+        result = ToolExecutionResult(
+            "medical.create_appointment",
+            "create_appointment",
+            False,
+            "REQ-DUPLICATE-SAFE-SERVICES",
+            None,
+            {"code": "DUPLICATE_BOOKING", "status": 409, "retryable": False},
+        )
+
+        manager.record_tool_result(
+            result,
+            "create_appointment",
+            {"service_id": "SERVICE-PT-001", "slot_id": "SLOT-PT-20260813-1000"},
+            safe_for_retry=False,
+            workflow="medical_booking",
+        )
+
+        services = interpreter.calls[0]["data"]["services"]
+        self.assertEqual(services[0], {"id": "SERVICE-US-001", "name": "腹部超聲波檢查"})
+        self.assertEqual(
+            state.recovery["options"][0]["payload"]["service_id"],
+            "SERVICE-US-001",
+        )
+
     def test_recovery_interpreter_call_logs_safe_summary(self):
         from middleware.task_manager.manager import TaskManager
 

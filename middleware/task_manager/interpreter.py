@@ -266,7 +266,30 @@ def _safe_data(data: Mapping[str, Any] | None) -> dict[str, Any]:
     if not isinstance(data, Mapping):
         return {}
     allowed = {"service_id", "date_from", "date_to", "doctor_id", "location_id"}
-    return {key: value for key, value in data.items() if key in allowed}
+    result = {key: value for key, value in data.items() if key in allowed}
+    services = data.get("services")
+    if isinstance(services, list):
+        result["services"] = _safe_services(services)
+    return result
+
+
+def _safe_services(value: list[Any]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for service in value:
+        if not isinstance(service, Mapping):
+            continue
+        service_id = service.get("id")
+        if not isinstance(service_id, str) or not service_id.strip():
+            continue
+        safe_service: dict[str, Any] = {"id": service_id.strip()}
+        for key in ("name", "name_en"):
+            label = service.get(key)
+            if isinstance(label, str) and label.strip():
+                safe_service[key] = label.strip()
+        if service.get("active") is False:
+            safe_service["active"] = False
+        result.append(safe_service)
+    return result
 
 
 def _parse_plan_response(response: object, error: Mapping[str, Any]) -> RecoveryPlan | None:
