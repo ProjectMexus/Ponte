@@ -30,7 +30,7 @@ http://127.0.0.1:15173/?middleware=http://127.0.0.1:18090
 - 文字輸入及快捷需求按鈕。
 - 支援 `SpeechRecognition` / `webkitSpeechRecognition` 時，以 `zh-HK` 取得粵語 transcript；transcript 會先回填文字框，使用者按送出後才傳給 middleware。
 - 支援 `speechSynthesis` 時朗讀助手回覆，並提供停止朗讀控制。
-- Middleware response 會以獨立任務卡顯示；進行中的任務展開顯示 steps、服務資料和下一步操作，完成、取消或不可恢復失敗的任務會收合但可重新展開。可恢復的 backend error（例如缺少資料、暫時 timeout 或目前沒有可預約時段）會留在同一張展開的任務卡，顯示原因、需要補充的資料和 retry／替代方案；按下方案後仍沿用同一 task。醫療查詢會顯示每筆預約的服務、日期、時間、地點和狀態；一般使用者不會看到 API 工具名稱、請求編號或原始 backend JSON。Intent LLM 只負責理解使用者需求，Task Recovery LLM 只負責理解 backend 結果並產生下一步方案；兩者分開管理。未來可讓文字／語音確認繼續同一任務。
+- Middleware response 會以獨立任務卡顯示；進行中的任務展開顯示 steps、服務資料和下一步操作，完成、取消或不可恢復失敗的任務會收合但可重新展開。已完成或已處理的步驟會自動收合，目前步驟和需要 recovery 的步驟保持展開；重試後的同名步驟會各自保留，使用者可以重新展開舊步驟查看當時的 user-safe 摘要。可恢復的 backend error（例如缺少資料、暫時 timeout 或目前沒有可預約時段）會留在同一張展開的任務卡，顯示原因、需要補充的資料和 retry／替代方案；按下方案後仍沿用同一 task。醫療查詢會顯示每筆預約的服務、日期、時間、地點和狀態；一般使用者不會看到 API 工具名稱、請求編號或原始 backend JSON。Intent LLM 只負責理解使用者需求，Task Recovery LLM 只負責理解 backend 結果並產生下一步方案；兩者分開管理。未來可讓文字／語音確認繼續同一任務。
 - 可用文字輸入測試自然語言 workflow：`我想查詢自己的醫療預約` 是只讀查詢，會建立一張查詢任務卡；`我想預約醫療服務` 會建立另一張進行中的任務卡，讓使用者選擇服務和日期範圍，展示可預約時段，再經確認建立 mock 預約。預約後再次輸入前一個查詢即可建立新的查詢任務並讀回記錄；另外也可測試 `我想查現金分享計劃` 和 `我想找長者文娛活動`。
 - 開發者整合測試仍保留固定 MCP tool 的 `confirm_tool` 確認 action 和既有 `sendAction` contract；這些技術細節不會出現在一般服務工作區。
 - middleware 連線錯誤不會清空既有對話或停用文字輸入。

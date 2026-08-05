@@ -126,6 +126,23 @@ class FrontendStaticTests(unittest.TestCase):
             self.assertIn(marker, source)
         self.assertNotIn("taskRoot.replaceChildren()", source)
 
+    def test_view_supports_collapsible_step_history(self):
+        source = Path("frontend/interaction-view.js").read_text(encoding="utf-8")
+        for marker in (
+            "stepHistory",
+            "updateStepHistory",
+            "stepHistoryKey",
+            "snapshotResponse",
+            "stepDataForSnapshot",
+            'createElement("details", "task-step-details")',
+            "task-step-summary",
+            "task-step-detail",
+            "entry.expanded",
+        ):
+            self.assertIn(marker, source)
+        self.assertIn("task.stepHistory = updateStepHistory", source)
+        self.assertNotIn("renderSteps(steps, response.steps", source)
+
     def test_app_routes_message_and_action_to_task_ids(self):
         source = Path("frontend/app.js").read_text(encoding="utf-8")
         self.assertIn("startTask", source)
