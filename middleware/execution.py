@@ -44,6 +44,27 @@ class ExecutionPipeline:
         return run(0, call)
 
 
+class ContextualExecutionPipeline:
+    """Inject trusted per-request context before using an existing pipeline."""
+
+    def __init__(self, pipeline: ExecutionPipeline):
+        self._pipeline = pipeline
+
+    def dispatch(
+        self,
+        call: ToolCall,
+        context: Mapping[str, Any],
+    ) -> ToolExecutionResult:
+        if not isinstance(context, Mapping):
+            raise ValueError("context must be an object")
+        trusted_call = ToolCall(
+            call.name,
+            {"context": dict(context), "input": dict(call.arguments)},
+            call.step_id,
+        )
+        return self._pipeline.dispatch(trusted_call)
+
+
 class DirectMcpExecutionStage:
     """Resolve a fixed tool definition and invoke the existing REST adapter."""
 

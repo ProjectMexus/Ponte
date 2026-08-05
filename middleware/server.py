@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import time
 import uuid
+from collections.abc import Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Type
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from MCP.registry import build_registry
 from ponte_logging import log_event
@@ -19,10 +21,32 @@ from .config import load_dotenv
 from .controller import InteractionController
 from .diagnostics import DiagnosticCommandError
 from .execution import ExecutionPipeline, McpExecutionStage
+from .execution import ContextualExecutionPipeline
 from .intent import IntentRecognizer
 from .mcp_client import McpStdioClient
+from .agent import RegistryDrivenAgent
+from .approval import ApprovalClassifier, ApprovalGate
+from .llm_transport import OpenAICompatibleChatClient
 from .session import SessionStore
 from .task_manager.interpreter import TaskRecoveryInterpreter, build_task_recovery_interpreter
+from .voice import (
+    UnavailableVoiceTurnProvider,
+    VoiceProviderError,
+    VoiceSpeechStore,
+    VoiceTurnProvider,
+    VoiceProviderSettings,
+    validate_voice_identifier,
+)
+from .voice_transport import (
+    MAX_MULTIPART_BODY_BYTES,
+    parse_voice_multipart,
+    voice_turn_envelope,
+)
+from .voice_services import (
+    OpenAICompatibleSpeechToText,
+    OpenAICompatibleTextToSpeech,
+    RegistryVoiceTurnProvider,
+)
 
 
 class ClientRequestError(Exception):
@@ -49,12 +73,14 @@ class MiddlewareApplication:
         mock_user_id: str = "USR-DEMO-001",
         intent_recognizer: IntentRecognizer | None = None,
         recovery_interpreter: TaskRecoveryInterpreter | None = None,
+        voice_turn_provider: VoiceTurnProvider | None = None,
     ) -> None:
         self.backend_url = backend_url.rstrip("/")
         self.patient_id = patient_id
         self.authorization = authorization
         self.mock_user_id = mock_user_id
         self.frontend_origins = frontend_origins
+        self._closed = False
         self.registry = build_registry()
         self.mcp_client = mcp_client or McpStdioClient(self.backend_url)
         self.mcp_client.start()
@@ -62,6 +88,8 @@ class MiddlewareApplication:
             McpExecutionStage(self.registry, self.mcp_client),
         ])
         self.sessions = SessionStore()
+        self.voice_turn_provider = voice_turn_provider or UnavailableVoiceTurnProvider()
+        self.voice_speech = VoiceSpeechStore()
         self.controller = InteractionController(
             self.pipeline,
             self.sessions,
@@ -75,7 +103,9 @@ class MiddlewareApplication:
 
     def close(self) -> None:
         """Release the MCP child process owned by this application."""
-
+        if self._closed:
+            return
+        self._closed = True
         self.mcp_client.close()
 
     def dispatch_tool(
@@ -101,12 +131,13 @@ def create_application(
     mock_user_id: str = "USR-DEMO-001",
     intent_recognizer: IntentRecognizer | None = None,
     recovery_interpreter: TaskRecoveryInterpreter | None = None,
+    voice_turn_provider: VoiceTurnProvider | None = None,
 ) -> MiddlewareApplication:
     """Create one isolated middleware application with in-memory sessions."""
 
     load_dotenv()
     origins = _frontend_origins(os.environ.get("PONTE_FRONTEND_ORIGINS"))
-    return MiddlewareApplication(
+    application = MiddlewareApplication(
         backend_url,
         patient_id,
         authorization,
@@ -115,15 +146,21 @@ def create_application(
         mock_user_id=mock_user_id,
         intent_recognizer=intent_recognizer,
         recovery_interpreter=recovery_interpreter,
+        voice_turn_provider=voice_turn_provider,
     )
+    if voice_turn_provider is None:
+        configured = _configured_voice_provider(application)
+        if configured is not None:
+            application.voice_turn_provider = configured
+    return application
 
 
 class MiddlewareHTTPServer(ThreadingHTTPServer):
     """HTTP server that closes the application-owned MCP process."""
 
     def __init__(self, server_address: tuple[str, int], handler: Type[BaseHTTPRequestHandler], application: MiddlewareApplication):
-        super().__init__(server_address, handler)
         self.application = application
+        super().__init__(server_address, handler)
 
     def server_close(self) -> None:
         self.application.close()
@@ -164,6 +201,16 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
             if raw:
                 self.wfile.write(raw)
 
+        def _send_binary(self, status: int, content_type: str, content: bytes) -> None:
+            self._response_status = status
+            self.send_response(status)
+            self._cors_headers()
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(content)
+
         def _cors_headers(self) -> None:
             origin = self.headers.get("Origin")
             if origin and (origin in application.frontend_origins or "*" in application.frontend_origins):
@@ -199,6 +246,43 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
                 raise ClientRequestError(400, "INVALID_REQUEST", "request body 必須是 JSON object。")
             return value
 
+        def _voice_turn(self):
+            length_value = self.headers.get("Content-Length")
+            if length_value is None:
+                raise ClientRequestError(400, "INVALID_VOICE_REQUEST", "Content-Length is required")
+            try:
+                length = int(length_value)
+            except ValueError as error:
+                raise ClientRequestError(400, "INVALID_CONTENT_LENGTH", "Content-Length is invalid") from error
+            if length < 0 or length > MAX_MULTIPART_BODY_BYTES:
+                raise ClientRequestError(413, "VOICE_AUDIO_TOO_LARGE", "Voice upload exceeds the 4 MiB limit")
+            raw = self.rfile.read(length)
+            if len(raw) != length:
+                raise ClientRequestError(400, "INVALID_VOICE_REQUEST", "Voice upload ended unexpectedly")
+            try:
+                return parse_voice_multipart(self.headers.get("Content-Type"), raw)
+            except ValueError as error:
+                if "must not exceed" in str(error):
+                    raise ClientRequestError(413, "VOICE_AUDIO_TOO_LARGE", "Voice upload exceeds the 4 MiB limit") from error
+                raise ClientRequestError(400, "INVALID_VOICE_REQUEST", str(error)) from error
+
+        def _speech(self, path: str) -> tuple[str, bytes]:
+            match = _VOICE_SPEECH_PATH.fullmatch(path)
+            if match is None:
+                raise ClientRequestError(404, "NOT_FOUND", "API path was not found")
+            session_values = parse_qs(urlsplit(self.path).query, keep_blank_values=True).get("session_id")
+            if session_values is None or len(session_values) != 1:
+                raise ClientRequestError(400, "INVALID_VOICE_REQUEST", "session_id query parameter is required once")
+            try:
+                session_id = validate_voice_identifier(session_values[0], "session_id")
+                turn_id = validate_voice_identifier(match.group("turn_id"), "turn_id")
+            except ValueError as error:
+                raise ClientRequestError(400, "INVALID_VOICE_REQUEST", str(error)) from error
+            speech = application.voice_speech.get(session_id, turn_id)
+            if speech is None:
+                raise ClientRequestError(404, "SPEECH_NOT_FOUND", "Speech is not available for this voice turn")
+            return speech.content_type, speech.content
+
         def _handle(self) -> None:
             request_id = f"HTTP-MW-{uuid.uuid4().hex[:12].upper()}"
             path = urlsplit(self.path).path
@@ -216,18 +300,31 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
                     self._send_json(204, None)
                     return
                 if self.command == "GET":
+                    if _VOICE_SPEECH_PATH.fullmatch(path):
+                        content_type, content = self._speech(path)
+                        self._send_binary(200, content_type, content)
+                        return
                     payload = self._get(path)
                     self._send_json(200, payload)
                     return
                 if self.command == "POST":
+                    if path == "/api/voice/turn":
+                        turn = self._voice_turn()
+                        result = application.voice_turn_provider.handle_turn(turn)
+                        if result.speech is not None:
+                            application.voice_speech.put(turn.session_id, turn.turn_id, result.speech)
+                        self._send_json(200, voice_turn_envelope(turn, result))
+                        return
                     payload = self._post(path, self._body())
                     self._send_json(200, payload)
                     return
-                if path in _KNOWN_PATHS:
+                if path in _KNOWN_PATHS or _VOICE_SPEECH_PATH.fullmatch(path):
                     raise ClientRequestError(405, "METHOD_NOT_ALLOWED", "此 API 不支援目前的 HTTP method。")
                 raise ClientRequestError(404, "NOT_FOUND", "找不到此 API 路徑。")
             except ClientRequestError as error:
                 self._send_error(error)
+            except VoiceProviderError as error:
+                self._send_error(ClientRequestError(error.status, error.code, error.message))
             except ValueError as error:
                 self._send_error(ClientRequestError(400, "INVALID_REQUEST", str(error)))
             except Exception:
@@ -263,6 +360,7 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
                     "backend_url": application.backend_url,
                     "tool_count": len(application.registry.names()),
                     "backend_reachable": result.ok,
+                    "voice_ready": not isinstance(application.voice_turn_provider, UnavailableVoiceTurnProvider),
                 }
                 return response
             if path == "/api/mcp/tools":
@@ -277,6 +375,16 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
                     request = InteractionRequest.from_json(body)
                 except ValueError as error:
                     raise ClientRequestError(400, "INVALID_REQUEST", str(error)) from error
+                if request.source == "voice" and hasattr(application.voice_turn_provider, "handle_transcript"):
+                    context = {
+                        "authorization": application.authorization,
+                        "patient_id": application.patient_id,
+                        "mock_user_id": application.mock_user_id,
+                        "accept_language": "zh-TW",
+                        "request_id": _request_id(),
+                        "idempotency_key": f"{request.session_id}:{_request_id()}",
+                    }
+                    return application.voice_turn_provider.handle_transcript(request.session_id, request.message, context).metadata
                 try:
                     return application.controller.handle_message(request)
                 except DiagnosticCommandError as error:
@@ -345,7 +453,57 @@ _KNOWN_PATHS = frozenset({
     "/api/mcp/tools/call",
     "/api/interactions/message",
     "/api/interactions/action",
+    "/api/voice/turn",
 })
+_VOICE_SPEECH_PATH = re.compile(r"/api/voice/turn/(?P<turn_id>[A-Za-z0-9][A-Za-z0-9._-]{0,127})/speech\Z")
+
+
+def _configured_voice_provider(application: MiddlewareApplication) -> VoiceTurnProvider | None:
+    """Compose cloud voice + registry agent only when all required endpoints exist."""
+    settings = VoiceProviderSettings.from_env()
+    llm_url = os.environ.get("PONTE_LLM_API_URL", "").strip()
+    voice_enabled = os.environ.get("PONTE_VOICE_AGENT_ENABLED", "").strip().lower() in {"1", "true", "yes"}
+    if not llm_url or (not settings.stt_url and not voice_enabled):
+        return None
+    try:
+        llm = OpenAICompatibleChatClient(
+            llm_url,
+            api_key=os.environ.get("PONTE_LLM_API_KEY", ""),
+            model=os.environ.get("PONTE_LLM_MODEL", "gpt-4o-mini").strip(),
+            timeout=float(os.environ.get("PONTE_LLM_TIMEOUT", "12")),
+        )
+        executor = ContextualExecutionPipeline(application.pipeline)
+        agent = RegistryDrivenAgent(application.registry, llm, executor)
+        approval_client = OpenAICompatibleChatClient(
+            os.environ.get("PONTE_APPROVAL_LLM_API_URL", llm_url),
+            api_key=os.environ.get("PONTE_APPROVAL_LLM_API_KEY", os.environ.get("PONTE_LLM_API_KEY", "")),
+            model=os.environ.get("PONTE_APPROVAL_LLM_MODEL", os.environ.get("PONTE_LLM_MODEL", "gpt-4o-mini")).strip(),
+            timeout=float(os.environ.get("PONTE_APPROVAL_LLM_TIMEOUT", "8")),
+        )
+        approval = ApprovalGate(ApprovalClassifier(approval_client, confidence_threshold=0.9), executor)
+        tts = OpenAICompatibleTextToSpeech() if settings.tts_url and settings.tts_model else None
+
+        def context_factory(turn: VoiceTurn) -> Mapping[str, Any]:
+            return {
+                "authorization": application.authorization,
+                "patient_id": application.patient_id,
+                "mock_user_id": application.mock_user_id,
+                "accept_language": "zh-TW",
+                "request_id": _request_id(),
+                "idempotency_key": f"{turn.session_id}:{turn.turn_id}",
+            }
+
+        return RegistryVoiceTurnProvider(
+            agent,
+            approval,
+            context_factory=context_factory,
+            stt=OpenAICompatibleSpeechToText(),
+            tts=tts,
+            settings=settings,
+        )
+    except (ValueError, TypeError, OSError):
+        # Configuration errors leave the explicit 503 provider in place.
+        return None
 
 
 def _safe_tool_arguments(arguments: dict[str, Any], application: MiddlewareApplication) -> dict[str, Any]:

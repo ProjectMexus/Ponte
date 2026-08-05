@@ -3,74 +3,56 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0c5b61" />
-    <title>Ponte｜公共服務助手</title>
+    <meta name="theme-color" content="#eef4ff" />
+    <meta name="color-scheme" content="light" />
+    <title>Ponte 語音服務</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
-    <header class="site-header">
-      <div class="brand-block">
-        <p class="eyebrow">PONTE</p>
-        <h1>公共服務助手</h1>
-        <p class="brand-subtitle">你說出需要，我幫你一步一步辦好。</p>
-      </div>
-      <div class="header-status">
-        <span id="health-status" class="health-status" role="status" aria-live="polite">正在檢查連線…</span>
-      </div>
+  <body class="voice-app">
+    <header class="voice-header">
+      <a class="brand-block" href="/" aria-label="Ponte home">Ponte</a>
+      <span id="health-status" class="health-status" role="status" aria-live="polite">
+        <i aria-hidden="true"></i><span id="health-label">Connecting</span>
+      </span>
+      <span id="connection-label" class="connection-label" role="status" aria-live="polite">Connecting…</span>
     </header>
 
-    <main class="app-shell">
-      <section class="conversation-panel" aria-labelledby="conversation-heading">
-        <div class="panel-heading">
-          <div>
-            <p class="section-kicker">第一步</p>
-            <h2 id="conversation-heading">告訴我你需要甚麼</h2>
-          </div>
-          <span class="helper-pill">可以打字，也可以說話</span>
+    <main class="voice-shell">
+      <section class="ponte-stage" aria-labelledby="voice-title">
+        <h1 id="voice-title" class="sr-only">Ponte 語音服務</h1>
+        <button id="ponte-button" class="ponte-button" type="button" aria-pressed="false" aria-describedby="voice-state">
+          <span class="ponte-rings" aria-hidden="true"><i></i><i></i><i></i></span>
+          <img id="ponte-avatar" src="/ponte2.jpg" alt="Ponte" data-default-avatar="/ponte2.jpg" />
+          <span class="sr-only">Start or stop voice turn</span>
+        </button>
+        <p id="voice-state" class="voice-state" role="status" aria-live="polite">Ready. Tap Ponte to talk.</p>
+        <div class="voice-status-panel" aria-hidden="true">
+          <span id="voice-status-label" class="voice-status-label">Ready</span>
+          <span id="voice-status-hint" class="voice-status-hint">Tap Ponte to talk</span>
         </div>
-
-        <div id="global-error" class="alert alert-error" role="alert" hidden></div>
-
-        <div id="conversation-list" class="conversation-list" aria-live="polite" aria-label="對話內容"></div>
-
-        <div class="quick-start" aria-label="常用說法">
-          <p class="quick-start-label">你也可以直接按：</p>
-          <div class="quick-start-actions">
-            <button class="quick-chip" type="button" data-quick-message="我想查詢醫療預約">查詢醫療預約</button>
-            <button class="quick-chip" type="button" data-quick-message="我想預約醫療服務">預約醫療服務</button>
-            <button class="quick-chip" type="button" data-quick-message="我想找人幫忙">需要人工幫忙</button>
-          </div>
-        </div>
-
-        <form id="message-form" class="message-form">
-          <label for="message-input">想對 Ponte 說什麼？</label>
-          <textarea id="message-input" rows="2" autocomplete="off" placeholder="例如：我想查詢醫療預約"></textarea>
-          <p id="speech-status" class="field-help" role="status" aria-live="polite">你可以先打字測試。</p>
-          <div class="input-actions">
-            <button id="mic-button" type="button" class="button button-secondary" aria-pressed="false">按這裡說話</button>
-            <button id="speak-stop-button" type="button" class="button button-secondary" aria-pressed="true">自動朗讀：開</button>
-            <button id="send-button" type="submit" class="button button-primary">送出</button>
-          </div>
-        </form>
+        <div class="voice-meter" aria-hidden="true"><span id="voice-meter-fill"></span></div>
+        <button id="stop-audio-button" class="stop-audio" type="button" hidden>Stop reply</button>
       </section>
 
-      <aside class="workspace-panel" aria-labelledby="workspace-heading">
-        <div class="panel-heading workspace-heading">
-          <div>
-            <p class="section-kicker">第二步</p>
-            <h2 id="workspace-heading">服務工作區</h2>
-          </div>
-          <span class="visible-execution">每一步都看得見</span>
-        </div>
-
-        <div id="task-list" class="task-list" aria-label="服務任務" aria-live="polite"></div>
-      </aside>
+      <section id="voice-exceptions" class="voice-exceptions" aria-live="polite" aria-label="Approval, receipt, and recovery messages">
+        <div id="global-error" class="voice-error" role="alert" hidden></div>
+        <div id="approval-region"></div>
+      </section>
+      <div id="conversation-caption" class="conversation-caption" role="status" aria-live="polite" aria-atomic="true">
+        <span id="caption-line" class="caption-line"></span>
+      </div>
     </main>
 
-    <footer class="site-footer">
-      <span>重要操作一定會先請你確認。</span>
-      <button id="human-help-button" type="button" class="footer-link">需要人工幫忙</button>
-    </footer>
+    <aside id="artifact-drawer" class="artifact-drawer" aria-labelledby="artifact-heading" aria-modal="true" role="dialog" hidden>
+      <div class="artifact-backdrop" data-artifact-close></div>
+      <section class="artifact-sheet">
+        <header class="artifact-header">
+          <div><p class="exception-kicker">Action receipt</p><h2 id="artifact-heading">Ponte</h2></div>
+          <button type="button" class="artifact-close" data-artifact-close aria-label="Close receipt">×</button>
+        </header>
+        <div id="artifact-content" class="artifact-content"></div>
+      </section>
+    </aside>
 
     <script type="module" src="/app.js"></script>
   </body>

@@ -98,7 +98,7 @@ class FullStackIntegrationTests(unittest.TestCase):
             },
         )
 
-        self.assertIn("公共服務助手", html)
+        self.assertIn("Ponte 語音服務", html)
         self.assertIn("MiddlewareClient", client_js)
         self.assertTrue(health["backend_reachable"])
         self.assertEqual(response["task_state"], "completed")
@@ -230,7 +230,7 @@ class FullStackIntegrationTests(unittest.TestCase):
         self.assertEqual(reopened["task_state"], "selecting_service")
         self.assertEqual(
             {service["id"] for service in reopened["data"]["services"]},
-            {"SERVICE-PT-001", "SERVICE-US-001"},
+            {"SERVICE-PT-001", "SERVICE-US-001", "SERVICE-ECHO-001"},
         )
 
         continued = self.post_middleware(

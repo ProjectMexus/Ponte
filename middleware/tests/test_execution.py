@@ -2,7 +2,12 @@ import unittest
 
 from MCP.errors import AdapterError
 from middleware.contracts import ToolCall, ToolExecutionResult
-from middleware.execution import DirectMcpExecutionStage, ExecutionPipeline, McpExecutionStage
+from middleware.execution import (
+    ContextualExecutionPipeline,
+    DirectMcpExecutionStage,
+    ExecutionPipeline,
+    McpExecutionStage,
+)
 from MCP.registry import build_registry
 
 
@@ -33,6 +38,26 @@ class RecordingMcpClient:
 
 
 class ExecutionTests(unittest.TestCase):
+    def test_contextual_pipeline_injects_server_context_around_bare_input(self):
+        captured = []
+
+        class TerminalStage:
+            def handle(self, call, next_stage):
+                captured.append(call)
+                return ToolExecutionResult(call.name, call.step_id, True, "REQ-CONTEXT", {})
+
+        executor = ContextualExecutionPipeline(ExecutionPipeline([TerminalStage()]))
+
+        executor.dispatch(
+            ToolCall("medical.list_departments", {"active_only": True}, "departments"),
+            {"authorization": "Bearer trusted"},
+        )
+
+        self.assertEqual(captured[0].arguments, {
+            "context": {"authorization": "Bearer trusted"},
+            "input": {"active_only": True},
+        })
+
     def test_direct_stage_calls_registry_definition_and_adapter(self):
         adapter = RecordingAdapter()
         stage = DirectMcpExecutionStage(build_registry(), adapter)

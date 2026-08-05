@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import time
+from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -21,6 +22,11 @@ class _StaticRequestHandler(SimpleHTTPRequestHandler):
 
     def translate_path(self, path: str) -> str:
         relative = Path(unquote(urlsplit(path).path).lstrip("/"))
+        # The voice avatar is a checked-in project asset kept next to the
+        # frontend directory. Serve only this explicit filename; all other
+        # project files remain outside the static root.
+        if relative == Path("ponte2.jpg"):
+            return str((self.root.parent / relative).resolve())
         candidate = (self.root / relative).resolve()
         if candidate != self.root and self.root not in candidate.parents:
             return str(self.root / "__ponte_missing_file__")
@@ -31,23 +37,39 @@ class _StaticRequestHandler(SimpleHTTPRequestHandler):
         self._request_log_code = None
         self._request_log_size = "-"
         self._response_bytes = None
+        self._request_log_emitted = False
         try:
             super().handle_one_request()
         finally:
-            if self._request_log_code is not None:
-                log_event(
-                    "frontend",
-                    "request_end",
-                    method=getattr(self, "command", ""),
-                    path=urlsplit(getattr(self, "path", "")).path,
-                    status=self._request_log_code,
-                    bytes=self._response_bytes if self._response_bytes is not None else self._request_log_size,
-                    latency_ms=(time.monotonic() - self._request_started_at) * 1000,
-                )
+            self._emit_request_log()
+
+    def _emit_request_log(self) -> None:
+        if self._request_log_emitted or self._request_log_code is None:
+            return
+        self._request_log_emitted = True
+        log_event(
+            "frontend",
+            "request_end",
+            method=getattr(self, "command", ""),
+            path=urlsplit(getattr(self, "path", "")).path,
+            status=self._request_log_code,
+            bytes=self._response_bytes if self._response_bytes is not None else self._request_log_size,
+            latency_ms=(time.monotonic() - self._request_started_at) * 1000,
+        )
 
     def log_request(self, code: int | str, size: int | str = "-") -> None:
-        self._request_log_code = code
+        if isinstance(code, HTTPStatus):
+            self._request_log_code = code.value
+        else:
+            try:
+                self._request_log_code = int(code)
+            except (TypeError, ValueError):
+                self._request_log_code = code
         self._request_log_size = size
+
+    def send_response(self, code: int | HTTPStatus, message: str | None = None) -> None:
+        self._request_log_code = code.value if isinstance(code, HTTPStatus) else code
+        super().send_response(code, message)
 
     def send_header(self, keyword: str, value: str) -> None:
         if keyword.lower() == "content-length":
@@ -59,6 +81,9 @@ class _StaticRequestHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
+        # Emit before the response body is released so callers can observe a
+        # complete safe summary synchronously with the HTTP request.
+        self._emit_request_log()
         super().end_headers()
 
     def log_message(self, format: str, *args: Any) -> None:

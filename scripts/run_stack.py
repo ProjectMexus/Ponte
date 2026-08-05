@@ -155,7 +155,9 @@ def run_stack(
         start("backend", commands.backend)
         wait_for_url(f"{backend_url}/mock/medical/v1/departments")
 
-        start("middleware", commands.middleware, middleware_environment(backend_url))
+        middleware_env = middleware_environment(backend_url)
+        middleware_env["PONTE_FRONTEND_ORIGINS"] = f"http://127.0.0.1:{frontend_port},http://localhost:{frontend_port}"
+        start("middleware", commands.middleware, middleware_env)
         wait_for_url(f"{middleware_url}/api/health")
 
         start("frontend", commands.frontend)

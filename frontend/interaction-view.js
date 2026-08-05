@@ -1,6 +1,7 @@
 const TASK_STATE_LABELS = {
   idle: "等待你的需要",
   querying: "正在查詢資料",
+  understanding: "正在理解你的要求",
   selecting_service: "請選擇服務",
   selecting_slot: "請選擇時段",
   awaiting_confirmation: "等待你的確認",
@@ -600,10 +601,92 @@ function slotLabel(slot) {
   return [date, range, location].filter((value) => value !== "—").join("｜");
 }
 
-const MOCK_REFERRAL_ID = "APT-REF-1";
-
 function actionKind(action) {
   return action.kind || action.action || action.id || "";
+}
+
+function approvalAppointment(response, type) {
+  const data = response?.data && typeof response.data === "object" ? response.data : {};
+  if (type === "proposed") {
+    if (data.proposed_appointment && typeof data.proposed_appointment === "object") return data.proposed_appointment;
+    return {};
+  }
+  return data.current_appointment || {};
+}
+
+function approvalDate(value) {
+  if (!value) return "—";
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? dateOnly(`${value}T00:00:00+08:00`) : displayDate(value);
+}
+
+function renderApprovalCard(container, response, onAction) {
+  if (!container) return;
+  container.replaceChildren();
+  const actions = Array.isArray(response?.actions) ? response.actions : [];
+  const needsApproval = response?.task_state === "awaiting_confirmation" || actions.some((action) => ["confirm", "confirm_reschedule", "confirm_tool"].includes(actionKind(action)));
+  if (!needsApproval || !actions.length) return;
+
+  const card = createElement("section", "approval-card");
+  const heading = createElement("div", "approval-card-header");
+  heading.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg><span>需要你的確認</span>';
+  card.append(heading);
+  card.append(createElement("h3", "", "請確認這項服務安排"));
+
+  const proposed = approvalAppointment(response, "proposed");
+  const current = approvalAppointment(response, "current");
+  const facts = createElement("dl", "approval-facts");
+  const values = [
+    ["新安排", [approvalDate(proposed.date), proposed.time, proposed.doctor].filter(Boolean).join(" · ")],
+    ["原有安排", [approvalDate(current.date), current.time, current.doctor].filter(Boolean).join(" · ")],
+  ].filter(([, value]) => value);
+  values.forEach(([label, value]) => {
+    const row = createElement("div", "approval-fact");
+    row.append(createElement("dt", "", label), createElement("dd", "", value));
+    facts.append(row);
+  });
+  if (facts.children.length) card.append(facts);
+
+  const actionRow = createElement("div", "approval-actions");
+  actions.forEach((action) => {
+    const kind = actionKind(action);
+    if (kind === "request_human_help" || kind === "human_help") return;
+    const button = createElement("button", `action-button ${["confirm", "confirm_reschedule", "confirm_tool"].includes(kind) ? "is-confirm" : ""}`, action.label || "繼續");
+    button.type = "button";
+    button.addEventListener("click", () => {
+      const payload = {...(action.payload || {})};
+      onAction({...action, payload});
+    });
+    actionRow.append(button);
+  });
+  if (actionRow.children.length) card.append(actionRow);
+  container.append(card);
+}
+
+function renderArtifactContent(container, receipt) {
+  container.replaceChildren();
+  if (!receipt) return;
+  const success = createElement("div", "artifact-success");
+  success.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>服務已完成，收據已保存</span>';
+  container.append(success);
+  const newAppointment = receipt.new_appointment || {};
+  const oldAppointment = receipt.old_appointment || {};
+  const section = (title, fields) => {
+    const wrapper = createElement("section", "artifact-section");
+    wrapper.append(createElement("h3", "", title));
+    const list = createElement("dl", "artifact-fields");
+    fields.filter(([, value]) => value).forEach(([label, value]) => {
+      const row = createElement("div", "artifact-field");
+      row.append(createElement("dt", "", label), createElement("dd", "", String(value)));
+      list.append(row);
+    });
+    wrapper.append(list);
+    return wrapper;
+  };
+  container.append(section("新安排", [["日期", approvalDate(newAppointment.date)], ["時間", newAppointment.time], ["醫生", newAppointment.doctor]]));
+  container.append(section("原有安排", [["日期", approvalDate(oldAppointment.date)], ["時間", oldAppointment.time], ["醫生", oldAppointment.doctor]]));
+  container.append(section("通知", [["狀態", receipt.notification_status === "delivered" ? "已傳送" : receipt.notification_status === "pending" ? "待重試" : "未啟用"]]));
+  const reference = createElement("p", "artifact-reference", `參考編號：${receipt.receipt_id || "—"}`);
+  container.append(reference);
 }
 
 function createReferralControl(data) {
@@ -632,8 +715,7 @@ function createReferralControl(data) {
     control = createElement("input");
     control.type = "text";
     control.name = "referring_appointment_id";
-    control.value = MOCK_REFERRAL_ID;
-    control.placeholder = MOCK_REFERRAL_ID;
+    control.placeholder = "請輸入轉介編號";
   }
   field.append(control);
   return control;
@@ -761,15 +843,47 @@ function renderRecovery(container, recovery, { showExplanation = true } = {}) {
 
 export function createInteractionView({
   conversationRoot,
+  approvalRoot,
   healthRoot,
   taskListRoot,
   errorRoot,
+  artifactRoot,
+  artifactContentRoot,
   onAction,
 }) {
   /** @typedef {Object} TaskRecord */
   const tasks = [];
   let taskSequence = 0;
   let activeTaskId = null;
+  let lastReceiptId = null;
+  let lastFocusedElement = null;
+
+  function closeArtifact() {
+    if (!artifactRoot) return;
+    artifactRoot.hidden = true;
+    document.body.classList.remove("artifact-open");
+    if (lastFocusedElement && typeof lastFocusedElement.focus === "function") lastFocusedElement.focus();
+  }
+
+  function openArtifact(receipt) {
+    if (!artifactRoot || !artifactContentRoot || !receipt) return;
+    lastFocusedElement = document.activeElement;
+    renderArtifactContent(artifactContentRoot, receipt);
+    artifactRoot.hidden = false;
+    document.body.classList.add("artifact-open");
+    artifactRoot.querySelector("#artifact-close")?.focus();
+  }
+
+  function appendReceiptCta(receipt) {
+    const message = createElement("article", "message message-assistant receipt-message");
+    message.append(createElement("span", "message-label", "Ponte 回覆"), createElement("p", "", "收據已準備好，所有服務結果都整理在裡面。"));
+    const button = createElement("button", "receipt-link", "查看行動收據");
+    button.type = "button";
+    button.addEventListener("click", () => openArtifact(receipt));
+    message.append(button);
+    conversationRoot.append(message);
+    conversationRoot.scrollTop = conversationRoot.scrollHeight;
+  }
 
   function appendMessage(role, text) {
     if (!text) return;
@@ -871,6 +985,7 @@ export function createInteractionView({
       expanded: true,
     });
     activeTaskId = localId;
+    approvalRoot?.replaceChildren();
     renderTaskList();
     return localId;
   }
@@ -887,7 +1002,15 @@ export function createInteractionView({
     task.status = taskStatus(task.taskState);
     task.backendTaskId = typeof nextResponse.task_id === "string" ? nextResponse.task_id : task.backendTaskId;
     task.expanded = !TERMINAL_TASK_STATES.has(task.taskState);
-    if (nextResponse.assistant_message) appendMessage("assistant", nextResponse.assistant_message);
+    if (nextResponse.assistant_message && nextResponse.assistant_message !== task.lastAssistantMessage) {
+      appendMessage("assistant", nextResponse.assistant_message);
+      task.lastAssistantMessage = nextResponse.assistant_message;
+    }
+    renderApprovalCard(approvalRoot, nextResponse, (action) => onAction(action, task.localId));
+    if (nextResponse.receipt?.receipt_id && nextResponse.receipt.receipt_id !== lastReceiptId) {
+      appendReceiptCta(nextResponse.receipt);
+      lastReceiptId = nextResponse.receipt.receipt_id;
+    }
     clearError();
     renderTaskList();
   }
@@ -901,6 +1024,7 @@ export function createInteractionView({
     task.status = "running";
     task.expanded = true;
     activeTaskId = task.localId;
+    approvalRoot?.replaceChildren();
     renderTaskList();
     return true;
   }
@@ -929,6 +1053,7 @@ export function createInteractionView({
       actions: [],
       error: { message: error?.message || "暫時未能完成這一步，你可以再試一次。" },
     };
+    approvalRoot?.replaceChildren();
     renderTaskList();
   }
 
@@ -953,15 +1078,33 @@ export function createInteractionView({
 
   appendMessage("assistant", "你好，我是 Ponte。你可以告訴我想查詢或預約哪一項服務。重要操作一定會先請你確認。 ");
 
+  artifactRoot?.querySelector("#artifact-close")?.addEventListener("click", closeArtifact);
+  artifactRoot?.querySelectorAll("[data-artifact-close]").forEach((element) => element.addEventListener("click", closeArtifact));
+  artifactRoot?.querySelector("#artifact-print")?.addEventListener("click", () => window.print());
+  artifactRoot?.querySelector("#artifact-download")?.addEventListener("click", () => {
+    const html = `<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><title>Ponte 行動收據</title><body>${artifactContentRoot?.innerHTML || ""}</body></html>`;
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([html], {type: "text/html;charset=utf-8"}));
+    link.download = `ponte-receipt-${lastReceiptId || "service"}.html`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && artifactRoot && !artifactRoot.hidden) closeArtifact();
+  });
+
   return {
     appendUserMessage: (text) => appendMessage("user", text),
     startTask,
     updateTask,
+    getTaskResponse: (taskId) => findTask(taskId)?.response || null,
     continueTask,
     toggleTask,
     failTask,
     renderHealth,
     renderError,
     clearError,
+    closeArtifact,
+    openArtifact,
   };
 }

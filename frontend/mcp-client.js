@@ -27,14 +27,17 @@ export class MiddlewareClient {
   async request(path, options = {}) {
     let response;
     try {
+      const hasBody = options.body !== undefined && options.body !== null;
+      const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
       response = await fetch(`${this.baseUrl}${path}`, {
         ...options,
         headers: {
-          "Content-Type": "application/json",
+          ...(hasBody && !isFormData ? { "Content-Type": "application/json" } : {}),
           ...(options.headers || {}),
         },
       });
     } catch (error) {
+      if (error?.name === "AbortError") throw error;
       throw new MiddlewareError(
         "MIDDLEWARE_UNAVAILABLE",
         "暫時未能連接服務中心，請稍後再試。",
@@ -72,18 +75,33 @@ export class MiddlewareClient {
     return this.request("/api/health");
   }
 
-  sendMessage(body) {
+  sendMessage(body, options = {}) {
     return this.request("/api/interactions/message", {
+      ...options,
       method: "POST",
       body: JSON.stringify(body),
     });
   }
 
-  sendAction(body) {
+  absoluteUrl(path) {
+    return new URL(path, `${this.baseUrl}/`).toString();
+  }
+
+  sendAction(body, options = {}) {
     return this.request("/api/interactions/action", {
+      ...options,
       method: "POST",
       body: JSON.stringify(body),
     });
+  }
+
+  sendVoiceTurn({ sessionId, turnId, audio, signal }) {
+    const form = new FormData();
+    form.append("session_id", sessionId);
+    form.append("turn_id", turnId);
+    form.append("locale", "zh-HK");
+    form.append("audio", audio, `ponte-${turnId}.${audio?.type?.includes("ogg") ? "ogg" : "webm"}`);
+    return this.request("/api/voice/turn", { method: "POST", body: form, signal });
   }
 
   callTool(name, argumentsValue) {
