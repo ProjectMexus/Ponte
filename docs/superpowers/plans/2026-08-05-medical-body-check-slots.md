@@ -211,7 +211,7 @@ rg -n "SERVICE-ECHO-001|SLOT-US-20260813-0930|SLOT-US-20260814-1500|total.*3" do
 Expected: the new service, both new ultrasound slots, and the updated total
 are present in the service/slot examples.
 
-- [ ] **Step 4: Commit the documentation update**
+- [x] **Step 4: Commit the documentation update**
 
 ```powershell
 git add docs/api/jinghu-medical-mock-api.md
@@ -226,6 +226,14 @@ git commit -m "docs: describe expanded medical appointment slots"
 **Interfaces:**
 - Consumes: All changes from Tasks 1–3.
 - Produces: Fresh test evidence and a clean, reviewable branch diff.
+
+- [x] **Step 0: Align the full-stack catalog expectation**
+
+Update `tests/test_middleware_integration.py` so the existing end-to-end
+medical booking test asserts the three-service catalog and still selects
+`SERVICE-PT-001` for its subsequent slot and confirmation steps. This keeps
+the integration test aligned with the intentional fixture expansion without
+changing the workflow under test.
 
 - [ ] **Step 1: Run focused medical verification**
 
