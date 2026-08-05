@@ -124,10 +124,14 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
             {"session_id": "S-2", "message": "我想預約醫療服務", "source": "text"},
         )
         self.assertEqual(
-            [service["id"] for service in cancelled["data"]["services"]],
-            ["SERVICE-PT-001"],
+            {service["id"] for service in cancelled["data"]["services"]},
+            {"SERVICE-US-001", "SERVICE-PT-001", "SERVICE-ECHO-001"},
         )
-        service_id_2 = cancelled["data"]["services"][0]["id"]
+        service_id_2 = next(
+            service["id"]
+            for service in cancelled["data"]["services"]
+            if service["id"] == "SERVICE-PT-001"
+        )
         cancelled = post_json(
             self.opener,
             f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/action",
