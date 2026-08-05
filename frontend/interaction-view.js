@@ -358,17 +358,126 @@ function renderData(container, data, response) {
   }
 }
 
-function renderSteps(container, steps, currentStep) {
-  container.replaceChildren();
-  (steps || []).forEach((step, index) => {
-    const rawStatus = step.status || (step.ok === false ? "failed" : step.ok === true ? "completed" : "pending");
-    const status = rawStatus === "pending" && step.step_id === currentStep ? "current" : rawStatus;
-    const item = createElement("li", `task-step is-${status}`);
-    item.append(
-      createElement("span", "task-step-marker", status === "completed" ? "✓" : String(index + 1)),
-      createElement("span", "task-step-label", STEP_LABELS[step.step_id] || "服務步驟"),
-      createElement("span", "task-step-status", STEP_STATUS_LABELS[status] || "尚未開始"),
+const TERMINAL_STEP_STATUSES = new Set(["completed", "failed"]);
+
+function cloneJsonValue(value) {
+  if (value === undefined || value === null) return value;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function stepStatus(step, currentStep) {
+  const rawStatus = step?.status || (
+    step?.ok === false ? "failed" : step?.ok === true ? "completed" : "pending"
+  );
+  return rawStatus === "pending" && step?.step_id === currentStep ? "current" : rawStatus;
+}
+
+function stepHistoryKey(stepId, occurrence) {
+  return String(stepId || "service_step") + ":" + occurrence;
+}
+
+function stepIsActive(status, step, response) {
+  return status === "current"
+    || (
+      status === "failed"
+      && step?.step_id === response?.current_step
+      && response?.task_state === "awaiting_user_input"
     );
+}
+
+function stepDataForSnapshot(stepId, data) {
+  const source = data && typeof data === "object" ? data : {};
+  const pick = (...keys) => Object.fromEntries(
+    keys.filter((key) => Object.prototype.hasOwnProperty.call(source, key))
+      .map((key) => [key, source[key]])
+  );
+  if (stepId === "load_appointments") return pick("intent", "appointments");
+  if (stepId === "load_services" || stepId === "select_service") return pick("services");
+  if (stepId === "search_slots") return pick("services", "slots", "service_id", "date_from", "date_to");
+  if (["select_slot", "confirm_appointment", "create_appointment", "get_task_status"].includes(stepId)) {
+    return pick("services", "selected_slot", "service_id", "slot_id", "task_status");
+  }
+  return source;
+}
+
+function snapshotResponse(response, stepId) {
+  return {
+    assistant_message: typeof response?.assistant_message === "string" ? response.assistant_message : "",
+    task_state: response?.task_state,
+    data: cloneJsonValue(stepDataForSnapshot(stepId, response?.data)),
+    error: cloneJsonValue(response?.error),
+    recovery: cloneJsonValue(response?.recovery),
+  };
+}
+
+function updateStepHistory(previousHistory, response) {
+  const previousByKey = new Map((previousHistory || []).map((entry) => [entry.key, entry]));
+  const occurrences = new Map();
+  const steps = Array.isArray(response?.steps) ? response.steps : [];
+  const latestIndexByStepId = new Map();
+  steps.forEach((step, index) => {
+    latestIndexByStepId.set(step?.step_id || "service_step", index);
+  });
+
+  return steps.map((step, index) => {
+    const stepId = step?.step_id || "service_step";
+    const occurrence = (occurrences.get(stepId) || 0) + 1;
+    occurrences.set(stepId, occurrence);
+    const key = stepHistoryKey(stepId, occurrence);
+    const status = stepStatus(step, response?.current_step);
+    const active = latestIndexByStepId.get(stepId) === index && stepIsActive(status, step, response);
+    const previous = previousByKey.get(key);
+    let expanded = previous ? previous.expanded : active;
+    if (previous?.active && !active && TERMINAL_STEP_STATUSES.has(status)) expanded = false;
+    if (previous && !previous.active && active && previous.status !== status) expanded = true;
+    return {
+      key,
+      step: cloneJsonValue(step),
+      status,
+      snapshot: previous?.snapshot || snapshotResponse(response, stepId),
+      expanded: Boolean(expanded),
+      active,
+    };
+  });
+}
+
+function renderStepSnapshot(container, entry) {
+  const snapshot = entry.snapshot || {};
+  if (snapshot.assistant_message) {
+    container.append(createElement("p", "task-step-message", snapshot.assistant_message));
+  }
+  const data = createElement("div", "task-step-content");
+  renderData(data, snapshot.data, snapshot);
+  container.append(data);
+  if (snapshot.error?.message) {
+    container.append(createElement("div", "alert alert-error", snapshot.error.message));
+  }
+  if (snapshot.recovery) {
+    const recovery = createElement("div", "recovery-content");
+    renderRecovery(recovery, snapshot.recovery);
+    container.append(recovery);
+  }
+}
+
+function renderSteps(container, stepHistory) {
+  container.replaceChildren();
+  (stepHistory || []).forEach((entry, index) => {
+    const item = createElement("li", `task-step is-${entry.status}`);
+    const details = createElement("details", "task-step-details");
+    details.open = Boolean(entry.expanded);
+    details.addEventListener("toggle", () => {
+      entry.expanded = details.open;
+    });
+    const summary = createElement("summary", "task-step-summary");
+    summary.append(
+      createElement("span", "task-step-marker", entry.status === "completed" ? "✓" : String(index + 1)),
+      createElement("span", "task-step-label", STEP_LABELS[entry.step.step_id] || "服務步驟"),
+      createElement("span", "task-step-status", STEP_STATUS_LABELS[entry.status] || "尚未開始"),
+    );
+    const detail = createElement("div", "task-step-detail");
+    renderStepSnapshot(detail, entry);
+    details.append(summary, detail);
+    item.append(details);
     container.append(item);
   });
 }
@@ -608,7 +717,7 @@ export function createInteractionView({
       if (task.response) {
         const steps = createElement("ol", "task-steps");
         steps.setAttribute("aria-label", "服務流程");
-        renderSteps(steps, response.steps, response.current_step);
+        renderSteps(steps, task.stepHistory);
         body.append(steps);
 
         const data = createElement("div", "task-content");
@@ -654,6 +763,7 @@ export function createInteractionView({
       taskState: "querying",
       currentStep: "welcome",
       response: null,
+      stepHistory: [],
       expanded: true,
     });
     activeTaskId = localId;
@@ -665,6 +775,7 @@ export function createInteractionView({
     const task = findTask(taskId);
     if (!task) return;
     const nextResponse = response && typeof response === "object" ? response : {};
+    task.stepHistory = updateStepHistory(task.stepHistory, nextResponse);
     task.response = nextResponse;
     task.taskState = nextResponse.task_state || "querying";
     task.currentStep = nextResponse.current_step || "welcome";

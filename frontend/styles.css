@@ -485,14 +485,46 @@ textarea::placeholder {
 }
 
 .task-step {
+  display: block;
+  border: 1px solid #d4e0de;
+  border-radius: 12px;
+  color: var(--muted);
+}
+
+.task-step-details > .task-step-summary {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 34px minmax(0, 1fr) auto 24px;
   align-items: center;
   gap: 10px;
   min-height: 52px;
   padding: 8px 10px;
-  border: 1px solid #d4e0de;
-  border-radius: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.task-step-summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-step-summary::after {
+  content: "＋";
+  color: var(--teal-700);
+  font-weight: 800;
+  text-align: center;
+}
+
+.task-step-details[open] > .task-step-summary::after {
+  content: "－";
+}
+
+.task-step-detail {
+  display: grid;
+  gap: 12px;
+  padding: 0 10px 14px 54px;
+}
+
+.task-step-message {
+  margin: 0;
   color: var(--muted);
 }
 
@@ -787,6 +819,15 @@ textarea::placeholder {
 
   .task-card-summary {
     grid-template-columns: minmax(0, 1fr) 28px;
+  }
+
+  .task-step-details > .task-step-summary {
+    grid-template-columns: 30px minmax(0, 1fr) auto 22px;
+    gap: 8px;
+  }
+
+  .task-step-detail {
+    padding-left: 48px;
   }
 
   .task-summary strong {
