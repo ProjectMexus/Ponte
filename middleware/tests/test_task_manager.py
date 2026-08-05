@@ -143,7 +143,7 @@ class TaskManagerContractTests(unittest.TestCase):
         self.assertNotIn("message", interpreter.calls[0]["error"])
         self.assertNotIn("RAW BACKEND CONFLICT MESSAGE", str(build_response(state, "請選擇下一步。", [])))
 
-    def test_recovery_context_preserves_safe_available_services(self):
+    def test_recovery_context_preserves_safe_available_services_for_generic_picker(self):
         from middleware.task_manager.manager import TaskManager
 
         class RecordingInterpreter:
@@ -189,9 +189,10 @@ class TaskManagerContractTests(unittest.TestCase):
         services = interpreter.calls[0]["data"]["services"]
         self.assertEqual(services[0], {"id": "SERVICE-US-001", "name": "腹部超聲波檢查"})
         self.assertEqual(
-            state.recovery["options"][0]["payload"]["service_id"],
-            "SERVICE-US-001",
+            state.recovery["options"][0]["action"],
+            "select_service",
         )
+        self.assertEqual(state.recovery["options"][0]["payload"], {})
 
     def test_recovery_interpreter_call_logs_safe_summary(self):
         from middleware.task_manager.manager import TaskManager

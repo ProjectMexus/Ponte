@@ -147,7 +147,7 @@ class FrontendStaticTests(unittest.TestCase):
             "renderActionHistory",
             "latestStepOwnsResponseContent",
             "重新選擇其他服務／科室",
-            'entry.step_id === "get_task_status"',
+            'step?.step_id === "get_task_status"',
         ):
             self.assertIn(marker, source)
         self.assertIn('actionKind(action) !== "search_slots"', source)
