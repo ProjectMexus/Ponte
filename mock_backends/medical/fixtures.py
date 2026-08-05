@@ -27,11 +27,19 @@ REGISTRATION_SLOTS = [
 APPOINTMENT_SERVICES = [
     {"resourceType": "HealthcareService", "id": "SERVICE-US-001", "name": "腹部超聲波檢查", "name_en": "Abdominal Ultrasound", "type": "examination", "department_id": "DEPT-IMAGING", "location_id": "LOC-IMAGING-CENTER", "duration_minutes": 30, "requires_referral": True, "active": True},
     {"resourceType": "HealthcareService", "id": "SERVICE-PT-001", "name": "物理治療", "name_en": "Physical Therapy", "type": "treatment", "department_id": "DEPT-REHAB", "location_id": "LOC-REHAB-01", "duration_minutes": 45, "requires_referral": True, "active": True},
+    {"resourceType": "HealthcareService", "id": "SERVICE-ECHO-001", "name": "心臟超聲波檢查", "name_en": "Cardiac Ultrasound", "type": "examination", "department_id": "DEPT-CARDIO", "location_id": "LOC-MAIN-OPD", "duration_minutes": 30, "requires_referral": True, "active": True},
 ]
 
 APPOINTMENT_SLOTS = [
     {"resourceType": "Slot", "id": "SLOT-US-20260812-1400", "status": "free", "slot_type": "examination", "service_id": "SERVICE-US-001", "department_id": "DEPT-IMAGING", "location_id": "LOC-IMAGING-CENTER", "start": "2026-08-12T14:00:00+08:00", "end": "2026-08-12T14:30:00+08:00", "capacity": 1, "remaining": 1},
     {"resourceType": "Slot", "id": "SLOT-PT-20260813-1000", "status": "free", "slot_type": "treatment", "service_id": "SERVICE-PT-001", "department_id": "DEPT-REHAB", "location_id": "LOC-REHAB-01", "start": "2026-08-13T10:00:00+08:00", "end": "2026-08-13T10:45:00+08:00", "capacity": 2, "remaining": 2},
+    {"resourceType": "Slot", "id": "SLOT-US-20260813-0930", "status": "free", "slot_type": "examination", "service_id": "SERVICE-US-001", "department_id": "DEPT-IMAGING", "location_id": "LOC-IMAGING-CENTER", "start": "2026-08-13T09:30:00+08:00", "end": "2026-08-13T10:00:00+08:00", "capacity": 1, "remaining": 1},
+    {"resourceType": "Slot", "id": "SLOT-US-20260814-1500", "status": "free", "slot_type": "examination", "service_id": "SERVICE-US-001", "department_id": "DEPT-IMAGING", "location_id": "LOC-IMAGING-CENTER", "start": "2026-08-14T15:00:00+08:00", "end": "2026-08-14T15:30:00+08:00", "capacity": 1, "remaining": 1},
+    {"resourceType": "Slot", "id": "SLOT-PT-20260812-1000", "status": "free", "slot_type": "treatment", "service_id": "SERVICE-PT-001", "department_id": "DEPT-REHAB", "location_id": "LOC-REHAB-01", "start": "2026-08-12T10:00:00+08:00", "end": "2026-08-12T10:45:00+08:00", "capacity": 2, "remaining": 2},
+    {"resourceType": "Slot", "id": "SLOT-PT-20260814-1400", "status": "free", "slot_type": "treatment", "service_id": "SERVICE-PT-001", "department_id": "DEPT-REHAB", "location_id": "LOC-REHAB-01", "start": "2026-08-14T14:00:00+08:00", "end": "2026-08-14T14:45:00+08:00", "capacity": 2, "remaining": 2},
+    {"resourceType": "Slot", "id": "SLOT-ECHO-20260812-0900", "status": "free", "slot_type": "examination", "service_id": "SERVICE-ECHO-001", "department_id": "DEPT-CARDIO", "location_id": "LOC-MAIN-OPD", "start": "2026-08-12T09:00:00+08:00", "end": "2026-08-12T09:30:00+08:00", "capacity": 1, "remaining": 1},
+    {"resourceType": "Slot", "id": "SLOT-ECHO-20260813-1500", "status": "free", "slot_type": "examination", "service_id": "SERVICE-ECHO-001", "department_id": "DEPT-CARDIO", "location_id": "LOC-MAIN-OPD", "start": "2026-08-13T15:00:00+08:00", "end": "2026-08-13T15:30:00+08:00", "capacity": 1, "remaining": 1},
+    {"resourceType": "Slot", "id": "SLOT-ECHO-20260814-1100", "status": "free", "slot_type": "examination", "service_id": "SERVICE-ECHO-001", "department_id": "DEPT-CARDIO", "location_id": "LOC-MAIN-OPD", "start": "2026-08-14T11:00:00+08:00", "end": "2026-08-14T11:30:00+08:00", "capacity": 1, "remaining": 1},
 ]
 
 
