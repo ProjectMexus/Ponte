@@ -2,6 +2,7 @@ import json
 import tempfile
 import threading
 import unittest
+from datetime import datetime, timedelta
 from urllib.error import HTTPError
 from pathlib import Path
 from urllib.request import ProxyHandler, Request, build_opener
@@ -11,6 +12,12 @@ from middleware.intent import KeywordIntentRecognizer
 from middleware.server import create_application, create_http_server
 from middleware.task_manager.interpreter import DeterministicTaskRecoveryInterpreter
 from mock_backends.server import create_http_server as create_backend_http_server
+from mock_backends.core.clock import MACAU_TZ
+
+
+def booking_window():
+    today = datetime.now(MACAU_TZ).date()
+    return today.isoformat(), (today + timedelta(days=14)).isoformat()
 
 
 class FullStackIntegrationTests(unittest.TestCase):
@@ -130,6 +137,7 @@ class FullStackIntegrationTests(unittest.TestCase):
 
     def test_duplicate_booking_recovery_offers_other_available_service(self):
         self.middleware_app.controller.recovery_interpreter = DeterministicTaskRecoveryInterpreter()
+        date_from, date_to = booking_window()
 
         first = self.post_middleware(
             "/api/interactions/message",
@@ -150,8 +158,8 @@ class FullStackIntegrationTests(unittest.TestCase):
                 "action": "search_slots",
                 "payload": {
                     "service_id": "SERVICE-PT-001",
-                    "date_from": "2026-08-05",
-                    "date_to": "2026-08-19",
+                    "date_from": date_from,
+                    "date_to": date_to,
                 },
             },
         )
@@ -189,8 +197,8 @@ class FullStackIntegrationTests(unittest.TestCase):
                 "action": "search_slots",
                 "payload": {
                     "service_id": "SERVICE-PT-001",
-                    "date_from": "2026-08-05",
-                    "date_to": "2026-08-19",
+                    "date_from": date_from,
+                    "date_to": date_to,
                 },
             },
         )
@@ -240,8 +248,8 @@ class FullStackIntegrationTests(unittest.TestCase):
                 "action": "search_slots",
                 "payload": {
                     "service_id": "SERVICE-US-001",
-                    "date_from": "2026-08-05",
-                    "date_to": "2026-08-19",
+                    "date_from": date_from,
+                    "date_to": date_to,
                 },
             },
         )

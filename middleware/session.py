@@ -26,6 +26,9 @@ class SessionState:
     confirmation_record: dict[str, Any] | None = None
     last_error: dict[str, Any] | None = None
     recovery: dict[str, Any] | None = None
+    active_task_id: str | None = None
+    task: dict[str, Any] | None = None
+    interaction_log: list[dict[str, Any]] = field(default_factory=list)
 
     def reset_for_new_task(self) -> None:
         """Clear the current workflow before handling a new high-level request."""
@@ -39,6 +42,9 @@ class SessionState:
         self.confirmation_record = None
         self.last_error = None
         self.recovery = None
+        self.active_task_id = None
+        self.task = None
+        self.interaction_log.clear()
 
 
 class SessionStore:

@@ -75,24 +75,16 @@ export class MiddlewareClient {
     return this.request("/api/health");
   }
 
-  sendMessage(body, options = {}) {
-    return this.request("/api/interactions/message", {
+  sendInteraction(envelope, options = {}) {
+    return this.request("/api/interactions", {
       ...options,
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify(envelope),
     });
   }
 
   absoluteUrl(path) {
     return new URL(path, `${this.baseUrl}/`).toString();
-  }
-
-  sendAction(body, options = {}) {
-    return this.request("/api/interactions/action", {
-      ...options,
-      method: "POST",
-      body: JSON.stringify(body),
-    });
   }
 
   sendVoiceTurn({ sessionId, turnId, audio, signal }) {

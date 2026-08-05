@@ -11,6 +11,10 @@ function makeTurnId() {
   return `VT-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+function makeInteractionId() {
+  return `INT-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
 function byId(id) {
   return document.getElementById(id);
 }
@@ -19,9 +23,17 @@ function isAbort(error) {
   return error?.name === "AbortError";
 }
 
+function interactionPayload(payload) {
+  const result = payload?.result;
+  if (result && typeof result === "object" && (result.response || result.workspace || result.task)) return result;
+  return payload && typeof payload === "object" ? payload : {};
+}
+
 function responseAudioUrl(payload) {
-  const speech = payload?.voice_turn?.speech || payload?.speech || payload?.audio;
-  return typeof speech?.url === "string" && speech.url ? speech.url : null;
+  const interaction = interactionPayload(payload);
+  const speechAudio = payload?.speech_audio || interaction.speech_audio;
+  if (speechAudio?.status !== "ready") return null;
+  return typeof speechAudio.url === "string" && speechAudio.url ? speechAudio.url : null;
 }
 
 const DISPLAY_COPY = {
@@ -274,28 +286,55 @@ export function startPonteApp() {
 
   async function playResponse(payload, turn) {
     if (turn !== latestTurn) return;
-    const message = payload?.result?.assistant_message || payload?.assistant_message;
-    showPonteReply(message);
+    const interaction = interactionPayload(payload);
+    const response = interaction.response || {};
+    const displayText = typeof response.display_text === "string" ? response.display_text.trim() : "";
+    const speechText = typeof response.speech_text === "string" ? response.speech_text.trim() : "";
+    showPonteReply(displayText);
     const audioUrl = responseAudioUrl(payload);
     if (audioUrl) {
       const audio = new Audio(client.absoluteUrl(audioUrl));
       activeAudio = audio;
+      let browserFallbackStarted = false;
       audio.addEventListener("ended", () => {
         if (activeAudio === audio) {
           activeAudio = null;
           setState("ready");
         }
       }, { once: true });
+      const fallbackToBrowserSpeech = () => {
+        if (browserFallbackStarted || turn !== latestTurn) return;
+        browserFallbackStarted = true;
+        if (activeAudio === audio) activeAudio = null;
+        activeSpeechTurn = turn;
+        const speechStarted = speechText && speech.speak(speechText, { onEnd: () => {
+          if (turn === latestTurn) {
+            activeSpeechTurn = 0;
+            setState("ready");
+          }
+        } });
+        if (speechStarted) {
+          setState("speaking-response");
+          return;
+        }
+        activeSpeechTurn = 0;
+        if (turn === latestTurn) {
+          exceptions.renderError({ message: "未能播放 Ponte 的聲音。請檢查瀏覽器音訊權限與系統輸出裝置。" });
+          setState("audio-error");
+        }
+      };
+      audio.addEventListener("error", fallbackToBrowserSpeech, { once: true });
       try {
         await audio.play();
         if (turn === latestTurn) setState("speaking-response");
         return;
       } catch {
-        // User agents may block remote audio; speech synthesis below is the fallback.
+        fallbackToBrowserSpeech();
+        return;
       }
     }
     activeSpeechTurn = turn;
-    const speechStarted = message && speech.speak(message, { onEnd: () => {
+    const speechStarted = speechText && speech.speak(speechText, { onEnd: () => {
       if (turn === latestTurn) {
         activeSpeechTurn = 0;
         setState("ready");
@@ -328,8 +367,7 @@ export function startPonteApp() {
         signal: controller.signal,
       });
       if (turn !== latestTurn) return;
-      const result = payload?.result || payload;
-      exceptions.renderResponse(result);
+      exceptions.renderResponse(interactionPayload(payload));
       await playResponse(payload, turn);
     } catch (error) {
       if (turn !== latestTurn || isAbort(error)) return;
@@ -358,10 +396,12 @@ export function startPonteApp() {
     setState("processing");
     showUserSpeech(transcript);
     try {
-      const payload = await client.sendMessage({ session_id: sessionId, message: transcript, source: "voice" }, { signal: controller.signal });
+      const payload = await client.sendInteraction({
+        routing: { interaction_id: makeInteractionId(), session_id: sessionId },
+        event: { type: "user_utterance", task_id: null, content: transcript },
+      }, { signal: controller.signal });
       if (turn !== latestTurn) return;
-      exceptions.renderResponse(payload);
-      showPonteReply(payload?.assistant_message);
+      exceptions.renderResponse(interactionPayload(payload));
       await playResponse(payload, turn);
     } catch (error) {
       if (turn !== latestTurn || isAbort(error)) return;
@@ -372,9 +412,8 @@ export function startPonteApp() {
     }
   }
 
-  async function handleAction(action) {
-    const kind = action?.kind || action?.action || action?.id;
-    if (!kind) return;
+  async function handleAction(event) {
+    if (!event || typeof event !== "object" || Array.isArray(event)) return;
     interruptCurrentTurn();
     const turn = ++latestTurn;
     const controller = new AbortController();
@@ -382,10 +421,12 @@ export function startPonteApp() {
     exceptions.clearError();
     setState("processing");
     try {
-      const payload = await client.sendAction({ session_id: sessionId, action: kind, payload: action.payload || {} }, { signal: controller.signal });
+      const payload = await client.sendInteraction({
+        routing: { interaction_id: makeInteractionId(), session_id: sessionId },
+        event,
+      }, { signal: controller.signal });
       if (turn !== latestTurn) return;
-      exceptions.renderResponse(payload);
-      showPonteReply(payload?.assistant_message);
+      exceptions.renderResponse(interactionPayload(payload));
       await playResponse(payload, turn);
     } catch (error) {
       if (turn !== latestTurn || isAbort(error)) return;

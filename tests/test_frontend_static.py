@@ -119,24 +119,28 @@ class FrontendStaticTests(unittest.TestCase):
 
     def test_exceptions_keep_structured_approval_and_receipt_hooks(self):
         source = Path("frontend/voice-exceptions.js").read_text(encoding="utf-8")
-        for marker in ("renderApproval", "renderReceipt", "openArtifact", "response?.approval", "response?.artifact"):
+        for marker in ("renderApproval", "renderReceipt", "openArtifact", "response?.workspace", "response?.receipt"):
             self.assertIn(marker, source)
         self.assertIn("syncExceptionSurface", source)
 
-    def test_avatar_exceptions_render_appointment_and_recovery_actions(self):
+    def test_avatar_exceptions_render_server_workspace_actions(self):
         source = Path("frontend/voice-exceptions.js").read_text(encoding="utf-8")
         for marker in (
-            "renderTaskInteraction",
-            'task_state === "selecting_service"',
-            'task_state === "selecting_slot"',
-            'kind: "search_slots"',
-            'kind: "select_slot"',
-            "recovery?.explanation",
-            "recovery?.required_fields",
-            "onAction?.(action)",
-            "referring_appointment_id",
+            "renderWorkspace",
+            "renderCanonicalWorkspace",
+            "response?.recovery",
+            "canonicalReceiptFields",
         ):
             self.assertIn(marker, source)
+        for removed in (
+            "task_state",
+            "current_step",
+            'kind: "search_slots"',
+            'kind: "select_slot"',
+            "referring_appointment_id",
+            "receipt.html",
+        ):
+            self.assertNotIn(removed, source)
 
     def test_speech_fallback_remains_cantonese_capable(self):
         source = Path("frontend/speech.js").read_text(encoding="utf-8")

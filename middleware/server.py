@@ -21,12 +21,12 @@ from .config import load_dotenv
 from .controller import InteractionController
 from .diagnostics import DiagnosticCommandError
 from .execution import ExecutionPipeline, McpExecutionStage
-from .execution import ContextualExecutionPipeline
 from .intent import IntentRecognizer
+from .interaction_contracts import EventEnvelope
+from .interaction_core import InteractionCore
+from .interaction_delivery import DeliveryOrchestrator
+from .interaction_voice import CoreVoiceTurnProvider
 from .mcp_client import McpStdioClient
-from .agent import RegistryDrivenAgent
-from .approval import ApprovalClassifier, ApprovalGate
-from .llm_transport import OpenAICompatibleChatClient
 from .session import SessionStore
 from .task_manager.interpreter import TaskRecoveryInterpreter, build_task_recovery_interpreter
 from .voice import (
@@ -45,7 +45,6 @@ from .voice_transport import (
 from .voice_services import (
     OpenAICompatibleSpeechToText,
     OpenAICompatibleTextToSpeech,
-    RegistryVoiceTurnProvider,
 )
 
 
@@ -88,6 +87,16 @@ class MiddlewareApplication:
             McpExecutionStage(self.registry, self.mcp_client),
         ])
         self.sessions = SessionStore()
+        self.interaction_core = InteractionCore(
+            self.pipeline,
+            self.sessions,
+            patient_id,
+            authorization,
+            mock_user_id=mock_user_id,
+            intent_recognizer=intent_recognizer,
+            registry=self.registry,
+        )
+        self.delivery_orchestrator = DeliveryOrchestrator()
         self.voice_turn_provider = voice_turn_provider or UnavailableVoiceTurnProvider()
         self.voice_speech = VoiceSpeechStore()
         self.controller = InteractionController(
@@ -370,21 +379,24 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
         def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
             if path == "/api/mcp/tools/call":
                 return self._call_tool(body)
+            if path == "/api/interactions":
+                try:
+                    envelope = EventEnvelope.from_json(body)
+                    canonical = application.interaction_core.handle(envelope)
+                    return application.delivery_orchestrator.deliver(canonical)
+                except ValueError as error:
+                    raise ClientRequestError(400, "INVALID_INTERACTION", str(error)) from error
             if path == "/api/interactions/message":
                 try:
                     request = InteractionRequest.from_json(body)
                 except ValueError as error:
                     raise ClientRequestError(400, "INVALID_REQUEST", str(error)) from error
-                if request.source == "voice" and hasattr(application.voice_turn_provider, "handle_transcript"):
-                    context = {
-                        "authorization": application.authorization,
-                        "patient_id": application.patient_id,
-                        "mock_user_id": application.mock_user_id,
-                        "accept_language": "zh-TW",
-                        "request_id": _request_id(),
-                        "idempotency_key": f"{request.session_id}:{_request_id()}",
-                    }
-                    return application.voice_turn_provider.handle_transcript(request.session_id, request.message, context).metadata
+                if request.source == "voice":
+                    raise ClientRequestError(
+                        410,
+                        "INTERACTION_EVENT_REQUIRED",
+                        "Voice input must use /api/voice/turn or the normalized /api/interactions event contract.",
+                    )
                 try:
                     return application.controller.handle_message(request)
                 except DiagnosticCommandError as error:
@@ -453,50 +465,22 @@ _KNOWN_PATHS = frozenset({
     "/api/mcp/tools/call",
     "/api/interactions/message",
     "/api/interactions/action",
+    "/api/interactions",
     "/api/voice/turn",
 })
 _VOICE_SPEECH_PATH = re.compile(r"/api/voice/turn/(?P<turn_id>[A-Za-z0-9][A-Za-z0-9._-]{0,127})/speech\Z")
 
 
 def _configured_voice_provider(application: MiddlewareApplication) -> VoiceTurnProvider | None:
-    """Compose cloud voice + registry agent only when all required endpoints exist."""
+    """Compose STT/TTS adapters around the shared InteractionCore."""
     settings = VoiceProviderSettings.from_env()
-    llm_url = os.environ.get("PONTE_LLM_API_URL", "").strip()
-    voice_enabled = os.environ.get("PONTE_VOICE_AGENT_ENABLED", "").strip().lower() in {"1", "true", "yes"}
-    if not llm_url or (not settings.stt_url and not voice_enabled):
+    if not settings.stt_url or not settings.stt_model:
         return None
     try:
-        llm = OpenAICompatibleChatClient(
-            llm_url,
-            api_key=os.environ.get("PONTE_LLM_API_KEY", ""),
-            model=os.environ.get("PONTE_LLM_MODEL", "gpt-4o-mini").strip(),
-            timeout=float(os.environ.get("PONTE_LLM_TIMEOUT", "12")),
-        )
-        executor = ContextualExecutionPipeline(application.pipeline)
-        agent = RegistryDrivenAgent(application.registry, llm, executor)
-        approval_client = OpenAICompatibleChatClient(
-            os.environ.get("PONTE_APPROVAL_LLM_API_URL", llm_url),
-            api_key=os.environ.get("PONTE_APPROVAL_LLM_API_KEY", os.environ.get("PONTE_LLM_API_KEY", "")),
-            model=os.environ.get("PONTE_APPROVAL_LLM_MODEL", os.environ.get("PONTE_LLM_MODEL", "gpt-4o-mini")).strip(),
-            timeout=float(os.environ.get("PONTE_APPROVAL_LLM_TIMEOUT", "8")),
-        )
-        approval = ApprovalGate(ApprovalClassifier(approval_client, confidence_threshold=0.9), executor)
         tts = OpenAICompatibleTextToSpeech() if settings.tts_url and settings.tts_model else None
-
-        def context_factory(turn: VoiceTurn) -> Mapping[str, Any]:
-            return {
-                "authorization": application.authorization,
-                "patient_id": application.patient_id,
-                "mock_user_id": application.mock_user_id,
-                "accept_language": "zh-TW",
-                "request_id": _request_id(),
-                "idempotency_key": f"{turn.session_id}:{turn.turn_id}",
-            }
-
-        return RegistryVoiceTurnProvider(
-            agent,
-            approval,
-            context_factory=context_factory,
+        return CoreVoiceTurnProvider(
+            application.interaction_core,
+            application.delivery_orchestrator,
             stt=OpenAICompatibleSpeechToText(),
             tts=tts,
             settings=settings,

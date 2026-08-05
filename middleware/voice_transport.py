@@ -102,6 +102,18 @@ def voice_turn_envelope(turn: VoiceTurn, result: VoiceTurnResult) -> dict[str, A
                 f"/speech?session_id={quote(turn.session_id, safe='')}"
             ),
         })
+    result_metadata = deepcopy(dict(result.metadata))
+    if "speech_audio" not in result_metadata:
+        result_metadata["speech_audio"] = {
+            "status": "ready" if speech is not None else "unavailable",
+        }
+    if speech is not None and isinstance(result_metadata.get("speech_audio"), dict):
+        result_metadata["speech_audio"].setdefault("status", "ready")
+        result_metadata["speech_audio"].setdefault(
+            "url",
+            f"/api/voice/turn/{quote(turn.turn_id, safe='')}"
+            f"/speech?session_id={quote(turn.session_id, safe='')}",
+        )
     return {
         "voice_turn": {
             "session_id": turn.session_id,
@@ -113,5 +125,5 @@ def voice_turn_envelope(turn: VoiceTurn, result: VoiceTurnResult) -> dict[str, A
             },
             "speech": speech_metadata,
         },
-        "result": deepcopy(dict(result.metadata)),
+        "result": result_metadata,
     }

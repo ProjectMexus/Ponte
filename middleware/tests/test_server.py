@@ -146,6 +146,16 @@ class ServerTests(unittest.TestCase):
         error_body = json.loads(raised.exception.read())
         self.assertNotIn("traceback", json.dumps(error_body).lower())
 
+    def test_legacy_message_route_rejects_voice_source(self):
+        with self.assertRaises(HTTPError) as raised:
+            self.request("POST", "/api/interactions/message", {
+                "session_id": "S-SERVER-VOICE-LEGACY",
+                "message": "我想預約醫療服務",
+                "source": "voice",
+            })
+        self.assertEqual(raised.exception.code, 410)
+        self.assertEqual(json.loads(raised.exception.read())["error"]["code"], "INTERACTION_EVENT_REQUIRED")
+
 
 if __name__ == "__main__":
     unittest.main()
