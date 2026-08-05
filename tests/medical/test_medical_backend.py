@@ -150,14 +150,52 @@ class MedicalBackendTests(unittest.TestCase):
         self.assertEqual(response.status, 422)
         self.assertEqual(response.body["error"]["code"], "REFERRAL_REQUIRED")
 
+    def test_appointment_catalog_exposes_three_services_and_three_slots_each(self):
+        services = self.backend.handle(
+            self.medical_request("GET", "/appointment-services", patient=None)
+        )
+        service_ids = {item["id"] for item in services.body["data"]}
+        self.assertEqual(
+            service_ids,
+            {"SERVICE-US-001", "SERVICE-PT-001", "SERVICE-ECHO-001"},
+        )
+
+        for service_id in service_ids:
+            slots = self.backend.handle(
+                self.medical_request(
+                    "GET",
+                    "/appointment-slots",
+                    query={
+                        "service_id": [service_id],
+                        "date_from": ["2026-08-10"],
+                        "date_to": ["2026-08-14"],
+                    },
+                )
+            )
+            self.assertEqual(slots.body["meta"]["total"], 3)
+            self.assertEqual(len(slots.body["data"]), 3)
+            self.assertEqual(
+                {item["service_id"] for item in slots.body["data"]},
+                {service_id},
+            )
+            self.assertEqual(
+                len({item["start"] for item in slots.body["data"]}),
+                3,
+            )
+
     def test_appointment_services_hide_full_services_but_keep_available_services(self):
-        for index in range(2):
-            self.service.appointment_repository.insert({
-                "id": f"APT-PT-FULL-{index}",
-                "patient_id": f"P-OTHER-{index}",
-                "slot_id": "SLOT-PT-20260813-1000",
-                "status": "confirmed",
-            })
+        for slot_id in (
+            "SLOT-PT-20260813-1000",
+            "SLOT-PT-20260812-1000",
+            "SLOT-PT-20260814-1400",
+        ):
+            for index in range(2):
+                self.service.appointment_repository.insert({
+                    "id": f"APT-PT-FULL-{slot_id}-{index}",
+                    "patient_id": f"P-OTHER-{slot_id}-{index}",
+                    "slot_id": slot_id,
+                    "status": "confirmed",
+                })
 
         services = self.backend.handle(
             self.medical_request("GET", "/appointment-services", patient=None)
@@ -167,6 +205,7 @@ class MedicalBackendTests(unittest.TestCase):
         service_ids = {item["id"] for item in services.body["data"]}
         self.assertNotIn("SERVICE-PT-001", service_ids)
         self.assertIn("SERVICE-US-001", service_ids)
+        self.assertIn("SERVICE-ECHO-001", service_ids)
 
     def test_appointment_create_list_detail_and_task_do_not_leak_patient_data(self):
         created = self.backend.handle(
