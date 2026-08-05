@@ -37,7 +37,7 @@ class RecoveryPolicyTests(unittest.TestCase):
         self.assertEqual(plan.reason_code, "NO_AVAILABLE_SLOTS")
         self.assertEqual(plan.category, "availability")
 
-    def test_duplicate_booking_returns_submit_conflict_recovery_plan(self):
+    def test_duplicate_booking_returns_generic_service_picker(self):
         plan = build_recovery_plan(
             error={
                 "code": "DUPLICATE_BOOKING",
@@ -58,11 +58,14 @@ class RecoveryPolicyTests(unittest.TestCase):
         self.assertIn("不能再預約", plan.explanation)
         self.assertEqual(
             {option.action for option in plan.options},
-            {"search_slots", "cancel", "human_help"},
+            {"select_service", "cancel", "human_help"},
         )
+        picker = next(option for option in plan.options if option.action == "select_service")
+        self.assertEqual(picker.label, "重新選擇其他服務／科室")
+        self.assertEqual(dict(picker.payload), {})
         self.assertNotIn("同一病人已有衝突的有效預約。", plan.explanation)
 
-    def test_duplicate_booking_offers_other_available_services(self):
+    def test_duplicate_booking_does_not_choose_a_fixed_alternative_service(self):
         plan = build_recovery_plan(
             error={"code": "DUPLICATE_BOOKING"},
             step_id="create_appointment",
@@ -74,18 +77,18 @@ class RecoveryPolicyTests(unittest.TestCase):
                 "services": [
                     {"id": "SERVICE-US-001", "name": "腹部超聲波檢查"},
                     {"id": "SERVICE-PT-001", "name": "物理治療"},
+                    {"id": "SERVICE-CARDIO-001", "name": "心臟科門診"},
                 ],
             },
             result_data=None,
             retryable=False,
         )
 
-        search_options = [option for option in plan.options if option.action == "search_slots"]
-        self.assertTrue(search_options)
-        self.assertEqual(search_options[0].payload["service_id"], "SERVICE-US-001")
-        self.assertEqual(search_options[0].payload["date_from"], "2026-08-05")
-        self.assertEqual(search_options[0].payload["date_to"], "2026-08-19")
-        self.assertIn("超聲波", search_options[0].label)
+        self.assertEqual(
+            [option.action for option in plan.options],
+            ["select_service", "cancel", "human_help"],
+        )
+        self.assertNotIn("service_id", plan.options[0].payload)
 
     def test_slot_taken_during_confirmation_returns_same_service_search_option(self):
         plan = build_recovery_plan(

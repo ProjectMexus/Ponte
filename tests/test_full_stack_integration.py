@@ -213,19 +213,36 @@ class FullStackIntegrationTests(unittest.TestCase):
 
         self.assertEqual(second_selected["task_state"], "awaiting_confirmation")
         self.assertEqual(failed["recovery"]["reason_code"], "DUPLICATE_BOOKING")
-        alternative = next(
+        picker = next(
             action for action in failed["actions"]
-            if action["kind"] == "search_slots"
-            and action["payload"]["service_id"] == "SERVICE-US-001"
+            if action["kind"] == "select_service"
         )
-        self.assertIn("超聲波", alternative["label"])
+        self.assertEqual(picker["payload"], {})
+
+        reopened = self.post_middleware(
+            "/api/interactions/action",
+            {
+                "session_id": "FULL-ALT-SECOND",
+                "action": "select_service",
+                "payload": {},
+            },
+        )
+        self.assertEqual(reopened["task_state"], "selecting_service")
+        self.assertEqual(
+            {service["id"] for service in reopened["data"]["services"]},
+            {"SERVICE-PT-001", "SERVICE-US-001"},
+        )
 
         continued = self.post_middleware(
             "/api/interactions/action",
             {
                 "session_id": "FULL-ALT-SECOND",
                 "action": "search_slots",
-                "payload": alternative["payload"],
+                "payload": {
+                    "service_id": "SERVICE-US-001",
+                    "date_from": "2026-08-05",
+                    "date_to": "2026-08-19",
+                },
             },
         )
         self.assertEqual(continued["task_state"], "selecting_slot")
