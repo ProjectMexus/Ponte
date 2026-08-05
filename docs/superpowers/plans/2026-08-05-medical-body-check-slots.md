@@ -155,7 +155,7 @@ Expected: all medical backend tests pass, including the new three-service and
 three-slot assertions. Existing appointment creation and slot-race tests must
 continue to use `SLOT-US-20260812-1400` unchanged.
 
-- [ ] **Step 4: Commit the fixture expansion**
+- [x] **Step 4: Commit the fixture expansion**
 
 ```powershell
 git add mock_backends/medical/fixtures.py tests/medical/test_medical_backend.py
@@ -171,7 +171,7 @@ git commit -m "feat: expand medical appointment slot fixtures"
 - Consumes: The service and slot IDs from `mock_backends/medical/fixtures.py`.
 - Produces: Documentation examples that show all three services and the three abdominal-ultrasound slots returned by the documented date range.
 
-- [ ] **Step 1: Update the service catalog example**
+- [x] **Step 1: Update the service catalog example**
 
 In section 7.1, add the `SERVICE-ECHO-001` object after the existing
 `SERVICE-PT-001` object and change the metadata from `{"total": 2}` to
@@ -192,7 +192,7 @@ In section 7.1, add the `SERVICE-ECHO-001` object after the existing
 }
 ```
 
-- [ ] **Step 2: Update the documented abdominal-ultrasound slot response**
+- [x] **Step 2: Update the documented abdominal-ultrasound slot response**
 
 In section 7.2, keep the request range `2026-08-10` through `2026-08-14`
 and add the fixture records `SLOT-US-20260813-0930` and
@@ -200,7 +200,7 @@ and add the fixture records `SLOT-US-20260813-0930` and
 `3`; the three records must retain the exact `start`, `end`, and capacity
 values from the fixture.
 
-- [ ] **Step 3: Check documentation references**
+- [x] **Step 3: Check documentation references**
 
 Run:
 

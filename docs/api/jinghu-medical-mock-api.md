@@ -468,9 +468,21 @@ Query parameters：
       "duration_minutes": 45,
       "requires_referral": true,
       "active": true
+    },
+    {
+      "resourceType": "HealthcareService",
+      "id": "SERVICE-ECHO-001",
+      "name": "心臟超聲波檢查",
+      "name_en": "Cardiac Ultrasound",
+      "type": "examination",
+      "department_id": "DEPT-CARDIO",
+      "location_id": "LOC-MAIN-OPD",
+      "duration_minutes": 30,
+      "requires_referral": true,
+      "active": true
     }
   ],
-  "meta": {"total": 2}
+  "meta": {"total": 3}
 }
 ```
 
@@ -509,10 +521,36 @@ Query parameters：
       "end": "2026-08-12T14:30:00+08:00",
       "capacity": 1,
       "remaining": 1
+    },
+    {
+      "resourceType": "Slot",
+      "id": "SLOT-US-20260813-0930",
+      "status": "free",
+      "slot_type": "examination",
+      "service_id": "SERVICE-US-001",
+      "department_id": "DEPT-IMAGING",
+      "location_id": "LOC-IMAGING-CENTER",
+      "start": "2026-08-13T09:30:00+08:00",
+      "end": "2026-08-13T10:00:00+08:00",
+      "capacity": 1,
+      "remaining": 1
+    },
+    {
+      "resourceType": "Slot",
+      "id": "SLOT-US-20260814-1500",
+      "status": "free",
+      "slot_type": "examination",
+      "service_id": "SERVICE-US-001",
+      "department_id": "DEPT-IMAGING",
+      "location_id": "LOC-IMAGING-CENTER",
+      "start": "2026-08-14T15:00:00+08:00",
+      "end": "2026-08-14T15:30:00+08:00",
+      "capacity": 1,
+      "remaining": 1
     }
   ],
   "meta": {
-    "total": 1,
+    "total": 3,
     "timezone": "Asia/Macau",
     "booking_window_days": 14
   }
