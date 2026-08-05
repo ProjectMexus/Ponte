@@ -27,7 +27,7 @@
 - Consumes: `MedicalBackend.handle()` through the existing `medical_request()` helper.
 - Produces: A focused contract test proving the service list contains `SERVICE-US-001`, `SERVICE-PT-001`, and `SERVICE-ECHO-001`, and each service returns three unique slots.
 
-- [ ] **Step 1: Add the failing catalog test**
+- [x] **Step 1: Add the failing catalog test**
 
 Add this method to `MedicalBackendTests`:
 
@@ -92,7 +92,7 @@ Keep the existing assertions that `SERVICE-PT-001` is absent and
         self.assertIn("SERVICE-ECHO-001", service_ids)
 ```
 
-- [ ] **Step 2: Run the focused test and verify it fails for the old fixtures**
+- [x] **Step 2: Run the focused test and verify it fails for the old fixtures**
 
 Run:
 
@@ -103,7 +103,7 @@ python -m unittest tests.medical.test_medical_backend.MedicalBackendTests.test_a
 Expected: `FAIL`, with the service ID set missing `SERVICE-ECHO-001` and the
 old fixture still returning only one slot per existing service.
 
-- [ ] **Step 3: Commit the regression test**
+- [x] **Step 3: Commit the regression test**
 
 ```powershell
 git add tests/medical/test_medical_backend.py
@@ -119,7 +119,7 @@ git commit -m "test: cover expanded medical appointment catalog"
 - Consumes: Existing `DEPT-CARDIO`, `DEPT-IMAGING`, and `DEPT-REHAB` records.
 - Produces: `appointment_services()` with three active services and `appointment_slots()` with three available slots for each service.
 
-- [ ] **Step 1: Add the third service record**
+- [x] **Step 1: Add the third service record**
 
 Append this record to `APPOINTMENT_SERVICES` without changing the existing two
 records:
@@ -128,7 +128,7 @@ records:
     {"resourceType": "HealthcareService", "id": "SERVICE-ECHO-001", "name": "心臟超聲波檢查", "name_en": "Cardiac Ultrasound", "type": "examination", "department_id": "DEPT-CARDIO", "location_id": "LOC-MAIN-OPD", "duration_minutes": 30, "requires_referral": True, "active": True},
 ```
 
-- [ ] **Step 2: Add two slots to each existing service and three cardiac slots**
+- [x] **Step 2: Add two slots to each existing service and three cardiac slots**
 
 Keep the existing `SLOT-US-20260812-1400` and
 `SLOT-PT-20260813-1000` records. Add these records to `APPOINTMENT_SLOTS`:
@@ -143,7 +143,7 @@ Keep the existing `SLOT-US-20260812-1400` and
     {"resourceType": "Slot", "id": "SLOT-ECHO-20260814-1100", "status": "free", "slot_type": "examination", "service_id": "SERVICE-ECHO-001", "department_id": "DEPT-CARDIO", "location_id": "LOC-MAIN-OPD", "start": "2026-08-14T11:00:00+08:00", "end": "2026-08-14T11:30:00+08:00", "capacity": 1, "remaining": 1},
 ```
 
-- [ ] **Step 3: Run the focused medical tests**
+- [x] **Step 3: Run the focused medical tests**
 
 Run:
 
