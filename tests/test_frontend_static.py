@@ -142,6 +142,15 @@ class FrontendStaticTests(unittest.TestCase):
             self.assertIn(marker, source)
         self.assertIn("task.stepHistory = updateStepHistory", source)
         self.assertNotIn("renderSteps(steps, response.steps", source)
+        for marker in (
+            "selected_action",
+            "renderActionHistory",
+            "latestStepOwnsResponseContent",
+            "重新選擇其他服務／科室",
+            'entry.step_id === "get_task_status"',
+        ):
+            self.assertIn(marker, source)
+        self.assertIn('actionKind(action) !== "search_slots"', source)
 
     def test_app_routes_message_and_action_to_task_ids(self):
         source = Path("frontend/app.js").read_text(encoding="utf-8")

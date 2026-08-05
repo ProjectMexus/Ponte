@@ -411,20 +411,20 @@ class ControllerTests(unittest.TestCase):
         self.assertIn("不能再預約", response["assistant_message"])
         self.assertEqual(
             {action["kind"] for action in response["actions"]},
-            {"search_slots", "cancel", "human_help"},
+            {"select_service", "cancel", "human_help"},
         )
         self.assertNotIn("同一病人已有衝突的有效預約。", json.dumps(response, ensure_ascii=False))
 
-        search_option = next(
-            action for action in response["actions"] if action["kind"] == "search_slots"
+        picker = next(
+            action for action in response["actions"] if action["kind"] == "select_service"
         )
         continued = controller.handle_action(
-            InteractionActionRequest("S-SLOT-RACE", "search_slots", search_option["payload"])
+            InteractionActionRequest("S-SLOT-RACE", "select_service", picker["payload"])
         )
-        self.assertEqual(continued["task_state"], "selecting_slot")
-        self.assertEqual(continued["data"]["service_id"], "SERVICE-US-001")
+        self.assertEqual(continued["task_state"], "selecting_service")
+        self.assertEqual(continued["current_step"], "select_service")
 
-    def test_duplicate_booking_offers_loaded_alternative_service(self):
+    def test_duplicate_booking_reopens_dynamic_service_picker(self):
         pipeline = AlternativeServiceDuplicateBookingPipeline()
         controller = InteractionController(
             pipeline,
@@ -446,15 +446,32 @@ class ControllerTests(unittest.TestCase):
         failed = controller.handle_action(InteractionActionRequest("S-ALTERNATIVE", "confirm", {}))
 
         self.assertEqual(failed["recovery"]["reason_code"], "DUPLICATE_BOOKING")
-        search_options = [action for action in failed["actions"] if action["kind"] == "search_slots"]
-        self.assertEqual(search_options[0]["payload"]["service_id"], "SERVICE-US-001")
-        self.assertIn("超聲波", search_options[0]["label"])
-
-        continued = controller.handle_action(
-            InteractionActionRequest("S-ALTERNATIVE", "search_slots", search_options[0]["payload"])
+        self.assertEqual(
+            {action["kind"] for action in failed["actions"]},
+            {"select_service", "cancel", "human_help"},
         )
-        self.assertEqual(continued["task_state"], "selecting_slot")
-        self.assertEqual(continued["data"]["service_id"], "SERVICE-US-001")
+        self.assertEqual(
+            next(action for action in failed["actions"] if action["kind"] == "select_service")["payload"],
+            {},
+        )
+
+        reopened = controller.handle_action(
+            InteractionActionRequest("S-ALTERNATIVE", "select_service", {})
+        )
+        self.assertEqual(reopened["task_state"], "selecting_service")
+        self.assertEqual(reopened["current_step"], "select_service")
+        self.assertEqual(
+            {item["id"] for item in reopened["data"]["services"]},
+            {"SERVICE-PT-001", "SERVICE-US-001"},
+        )
+        self.assertEqual(
+            reopened["actions"],
+            [{"action": "cancel", "kind": "cancel", "label": "取消這次預約", "payload": {}}],
+        )
+        service_calls = [
+            call for call in pipeline.calls if call.name == "medical.list_appointment_services"
+        ]
+        self.assertGreaterEqual(len(service_calls), 2)
 
     def test_invalid_backend_response_remains_hard_failed(self):
         pipeline = InvalidAppointmentsPipeline()
