@@ -24,6 +24,7 @@ _RECOVERY_DATA_KEYS = frozenset({
     "date_to",
     "doctor_id",
     "location_id",
+    "services",
 })
 
 
@@ -196,11 +197,34 @@ class TaskManager:
 
 
 def _safe_recovery_data(data: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+    result = {
         key: deepcopy(value)
         for key, value in data.items()
-        if key in _RECOVERY_DATA_KEYS
+        if key in _RECOVERY_DATA_KEYS and key != "services"
     }
+    services = data.get("services")
+    if isinstance(services, list):
+        result["services"] = _safe_services(services)
+    return result
+
+
+def _safe_services(value: list[Any]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for service in value:
+        if not isinstance(service, Mapping):
+            continue
+        service_id = service.get("id")
+        if not isinstance(service_id, str) or not service_id.strip():
+            continue
+        safe_service: dict[str, Any] = {"id": service_id.strip()}
+        for key in ("name", "name_en"):
+            label = service.get(key)
+            if isinstance(label, str) and label.strip():
+                safe_service[key] = label.strip()
+        if service.get("active") is False:
+            safe_service["active"] = False
+        result.append(safe_service)
+    return result
 
 
 def _safe_error(error: Mapping[str, Any]) -> dict[str, Any]:

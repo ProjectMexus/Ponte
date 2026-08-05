@@ -111,6 +111,48 @@ class DuplicateBookingOnConfirmPipeline(RecordingPipeline):
         return super().dispatch(call)
 
 
+class AlternativeServiceDuplicateBookingPipeline(RecordingPipeline):
+    def dispatch(self, call):
+        if call.name == "medical.list_appointment_services":
+            self.calls.append(call)
+            return ToolExecutionResult(
+                call.name,
+                call.step_id,
+                True,
+                "REQ-SERVICES-ALTERNATIVE",
+                {
+                    "data": [
+                        {"id": "SERVICE-PT-001", "name": "物理治療"},
+                        {"id": "SERVICE-US-001", "name": "腹部超聲波檢查"},
+                    ],
+                },
+                None,
+            )
+        if call.name == "medical.search_appointment_slots":
+            self.calls.append(call)
+            service_id = call.arguments["input"]["service_id"]
+            if service_id == "SERVICE-PT-001":
+                return ToolExecutionResult(
+                    call.name,
+                    call.step_id,
+                    True,
+                    "REQ-SLOT-PT",
+                    {"data": [{"id": "SLOT-PT-20260813-1000", "start": "2026-08-13T10:00:00+08:00"}]},
+                    None,
+                )
+        if call.name == "medical.create_appointment":
+            self.calls.append(call)
+            return ToolExecutionResult(
+                call.name,
+                call.step_id,
+                False,
+                "REQ-DUPLICATE-ALTERNATIVE",
+                None,
+                {"code": "DUPLICATE_BOOKING", "status": 409, "retryable": False},
+            )
+        return super().dispatch(call)
+
+
 class InvalidAppointmentsPipeline(RecordingPipeline):
     def dispatch(self, call):
         if call.name == "medical.get_my_appointments":
@@ -378,6 +420,38 @@ class ControllerTests(unittest.TestCase):
         )
         continued = controller.handle_action(
             InteractionActionRequest("S-SLOT-RACE", "search_slots", search_option["payload"])
+        )
+        self.assertEqual(continued["task_state"], "selecting_slot")
+        self.assertEqual(continued["data"]["service_id"], "SERVICE-US-001")
+
+    def test_duplicate_booking_offers_loaded_alternative_service(self):
+        pipeline = AlternativeServiceDuplicateBookingPipeline()
+        controller = InteractionController(
+            pipeline,
+            SessionStore(),
+            "PAT-DEMO-001",
+            "Bearer mock-user-token",
+            intent_recognizer=KeywordIntentRecognizer(),
+        )
+        controller.handle_message(InteractionRequest("S-ALTERNATIVE", "我想預約醫療服務"))
+        controller.handle_action(InteractionActionRequest("S-ALTERNATIVE", "search_slots", {
+            "service_id": "SERVICE-PT-001",
+            "date_from": "2026-08-05",
+            "date_to": "2026-08-19",
+        }))
+        controller.handle_action(InteractionActionRequest("S-ALTERNATIVE", "select_slot", {
+            "slot_id": "SLOT-PT-20260813-1000",
+        }))
+
+        failed = controller.handle_action(InteractionActionRequest("S-ALTERNATIVE", "confirm", {}))
+
+        self.assertEqual(failed["recovery"]["reason_code"], "DUPLICATE_BOOKING")
+        search_options = [action for action in failed["actions"] if action["kind"] == "search_slots"]
+        self.assertEqual(search_options[0]["payload"]["service_id"], "SERVICE-US-001")
+        self.assertIn("超聲波", search_options[0]["label"])
+
+        continued = controller.handle_action(
+            InteractionActionRequest("S-ALTERNATIVE", "search_slots", search_options[0]["payload"])
         )
         self.assertEqual(continued["task_state"], "selecting_slot")
         self.assertEqual(continued["data"]["service_id"], "SERVICE-US-001")
