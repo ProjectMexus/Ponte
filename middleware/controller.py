@@ -25,6 +25,7 @@ from .task_manager.recovery import build_recovery_plan
 
 
 _ACTION_NAMES = frozenset({
+    "select_service",
     "search_slots",
     "select_slot",
     "confirm",
@@ -182,6 +183,8 @@ class InteractionController:
         action = request.action
         if action == "confirm_tool":
             return self._confirm_diagnostic(state)
+        if action == "select_service":
+            return self._select_service(state)
         if action == "search_slots":
             return self._search_slots(state, request.payload)
         if action == "select_slot":
@@ -286,6 +289,40 @@ class InteractionController:
         response = build_response(state, assistant_message, actions)
         response["mode"] = "mcp_diagnostic"
         return response
+
+    def _select_service(self, state: SessionState) -> dict[str, Any]:
+        for key in (
+            "service_id",
+            "date_from",
+            "date_to",
+            "slots",
+            "slot_id",
+            "selected_slot",
+            "task_id",
+            "task_status",
+        ):
+            state.data.pop(key, None)
+        state.confirmation_record = None
+
+        manager = self._task_manager(state)
+        manager.transition("querying", "load_services")
+        services_result = self._run_tool(
+            state,
+            "medical.list_appointment_services",
+            "load_services",
+            {},
+        )
+        services = self._result_data(state, services_result, "load_services")
+        if services is None:
+            return build_response(state, "暫時無法載入可預約服務，請稍後再試。", [])
+
+        state.data["services"] = services
+        manager.transition("selecting_service", "select_service")
+        return build_response(
+            state,
+            "請重新選擇你想預約的服務或科室。",
+            [{"action": "cancel", "label": "取消這次預約"}],
+        )
 
     def _search_slots(self, state: SessionState, payload: Mapping[str, Any]) -> dict[str, Any]:
         service_id = _payload_string(payload, "service_id")

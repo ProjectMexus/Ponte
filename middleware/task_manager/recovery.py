@@ -95,49 +95,16 @@ def _missing_information_plan(error: Mapping[str, Any] | None) -> RecoveryPlan:
 
 
 def _booking_conflict_plan(data: Mapping[str, Any]) -> RecoveryPlan:
-    options: list[RecoveryOption] = []
-    options.extend(_other_service_search_options(data))
-    if not options:
-        search_option = _same_service_search_option(data)
-        if search_option.payload.get("service_id") and search_option.payload.get("date_from") and search_option.payload.get("date_to"):
-            options.append(search_option)
-    options.extend([
-        RecoveryOption("cancel", "取消這次預約", {}),
-        RecoveryOption("human_help", "轉接人工協助", {}),
-    ])
     return RecoveryPlan(
         category="booking_conflict",
         reason_code="DUPLICATE_BOOKING",
         explanation="你已有同一時間的有效預約，這個時段不能再預約；可以重新查找其他可預約時段，或選擇其他協助方式。",
-        options=tuple(options),
+        options=(
+            RecoveryOption("select_service", "重新選擇其他服務／科室", {}),
+            RecoveryOption("cancel", "取消這次預約", {}),
+            RecoveryOption("human_help", "轉接人工協助", {}),
+        ),
     )
-
-
-def _other_service_search_options(data: Mapping[str, Any]) -> list[RecoveryOption]:
-    services = data.get("services")
-    if not isinstance(services, list):
-        return []
-    current_service_id = data.get("service_id")
-    options: list[RecoveryOption] = []
-    for service in services:
-        if not isinstance(service, Mapping):
-            continue
-        service_id = service.get("id")
-        if not isinstance(service_id, str) or not service_id.strip() or service_id.strip() == current_service_id:
-            continue
-        if service.get("active") is False:
-            continue
-        payload = {"service_id": service_id.strip()}
-        for key in ("date_from", "date_to"):
-            value = data.get(key)
-            if isinstance(value, str) and value.strip():
-                payload[key] = value.strip()
-        if set(("service_id", "date_from", "date_to")) - payload.keys():
-            continue
-        name = service.get("name") or service.get("name_en")
-        label = f"搜尋{name}時段" if isinstance(name, str) and name.strip() else "搜尋其他服務時段"
-        options.append(RecoveryOption("search_slots", label, payload))
-    return options
 
 
 def _availability_plan(

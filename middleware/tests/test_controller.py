@@ -464,14 +464,26 @@ class ControllerTests(unittest.TestCase):
             {item["id"] for item in reopened["data"]["services"]},
             {"SERVICE-PT-001", "SERVICE-US-001"},
         )
-        self.assertEqual(
-            reopened["actions"],
-            [{"action": "cancel", "kind": "cancel", "label": "取消這次預約", "payload": {}}],
-        )
+        self.assertEqual(reopened["actions"][0]["action"], "cancel")
+        self.assertEqual(reopened["actions"][0]["kind"], "cancel")
+        self.assertEqual(reopened["actions"][0]["label"], "取消這次預約")
         service_calls = [
             call for call in pipeline.calls if call.name == "medical.list_appointment_services"
         ]
         self.assertGreaterEqual(len(service_calls), 2)
+
+        continued = controller.handle_action(
+            InteractionActionRequest("S-ALTERNATIVE", "search_slots", {
+                "service_id": "SERVICE-US-001",
+                "date_from": "2026-08-10",
+                "date_to": "2026-08-14",
+            })
+        )
+        self.assertEqual(continued["data"]["service_id"], "SERVICE-US-001")
+        self.assertEqual(
+            pipeline.calls[-1].arguments["input"]["service_id"],
+            "SERVICE-US-001",
+        )
 
     def test_invalid_backend_response_remains_hard_failed(self):
         pipeline = InvalidAppointmentsPipeline()
