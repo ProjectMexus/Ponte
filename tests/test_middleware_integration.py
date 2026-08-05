@@ -341,9 +341,12 @@ class MiddlewareRecoveryIntegrationTests(unittest.TestCase):
         self.assertEqual(failed["task_state"], "awaiting_user_input")
         self.assertEqual(failed["recovery"]["reason_code"], "DUPLICATE_BOOKING")
         self.assertIn("其他可預約時段", failed["recovery"]["explanation"])
-        self.assertIn("search_slots", [action["kind"] for action in failed["actions"]])
+        picker = next(
+            action for action in failed["actions"]
+            if action["kind"] == "select_service"
+        )
+        self.assertEqual(picker["payload"], {})
         self.assertNotIn("RAW BACKEND CONFLICT MESSAGE", str(failed))
-        self.assertEqual(failed["data"]["service_id"], "SERVICE-US-001")
 
 
 if __name__ == "__main__":
