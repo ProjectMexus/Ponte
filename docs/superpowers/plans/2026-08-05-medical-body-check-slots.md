@@ -235,7 +235,7 @@ medical booking test asserts the three-service catalog and still selects
 the integration test aligned with the intentional fixture expansion without
 changing the workflow under test.
 
-- [ ] **Step 1: Run focused medical verification**
+- [x] **Step 1: Run focused medical verification**
 
 ```powershell
 python -m unittest tests.medical.test_medical_backend -v
@@ -243,7 +243,7 @@ python -m unittest tests.medical.test_medical_backend -v
 
 Expected: exit code 0 and no failed tests.
 
-- [ ] **Step 2: Run the complete unittest suite**
+- [x] **Step 2: Run the complete unittest suite**
 
 ```powershell
 python -m unittest discover -v
@@ -252,7 +252,13 @@ python -m unittest discover -v
 Expected: the suite completes; report any pre-existing unrelated environment
 failures separately instead of treating them as proof that this change passed.
 
-- [ ] **Step 3: Check the final diff and repository state**
+Observed: `python -m unittest discover -v` ran 222 tests. The medical and
+middleware integration tests passed; the only remaining failure was the
+pre-existing `tests.core.test_core_helpers.CoreHelperTests.test_domain_error_payload`,
+which expected `Asia/Macau` `+08:00` while this Windows Python environment's
+timezone fallback produced `+00:00`.
+
+- [x] **Step 3: Check the final diff and repository state**
 
 ```powershell
 git diff --check
@@ -260,11 +266,18 @@ git status --short --branch
 git log -4 --oneline --decorate
 ```
 
-Expected: no whitespace errors, the current branch is
-`codex/medical-body-check-slots`, and only the intentional commits are ahead
-of the starting point.
+Expected: no whitespace errors in the intentional change set, the current
+branch is `codex/medical-body-check-slots-impl`, and unrelated working-tree
+files are not staged.
 
-- [ ] **Step 4: Review each requirement against evidence**
+Observed: the targeted change-set diff check passed and no unrelated files
+were staged. Because the shared checkout received concurrent speech commits
+`4990a5f` and `5ea2f33` after this task's commits, the branch history is not
+pristine; the medical implementation commits are `a4815df`, `4d2843a`,
+`670f5db`, and `bb3a862`. A requested clean follow-up branch could not be
+created because the elevated Git operation was rejected.
+
+- [x] **Step 4: Review each requirement against evidence**
 
 Confirm from the focused test output and fixture inspection that:
 
@@ -273,3 +286,7 @@ Confirm from the focused test output and fixture inspection that:
 3. Existing slot-consumption and full-service filtering behavior still works.
 4. The API examples name the new service and its stable slot IDs.
 5. No middleware recovery code was changed.
+
+Evidence: the medical backend and middleware integration verification ran 12
+tests with no failures; the full discovery run had one unrelated timezone
+failure in `test_domain_error_payload`.
