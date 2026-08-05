@@ -73,17 +73,33 @@ function actionButton(action, onAction) {
 export function createVoiceExceptions({ approvalRoot, errorRoot, artifactRoot, artifactContentRoot, onAction } = {}) {
   let lastReceipt = null;
   let lastFocusedElement = null;
+  let errorTimer = null;
+  const exceptionSurface = approvalRoot?.closest(".voice-exceptions");
+
+  function syncExceptionSurface() {
+    exceptionSurface?.classList.toggle("has-modal", Boolean(
+      approvalRoot?.children.length || (errorRoot && !errorRoot.hidden),
+    ));
+  }
 
   function clearError() {
+    clearTimeout(errorTimer);
+    errorTimer = null;
     if (!errorRoot) return;
     errorRoot.hidden = true;
     errorRoot.replaceChildren();
+    syncExceptionSurface();
   }
 
   function renderError(error) {
     if (!errorRoot) return;
+    clearTimeout(errorTimer);
     errorRoot.hidden = false;
     errorRoot.textContent = error?.message || "暫時未能完成這次服務，請再試一次。";
+    syncExceptionSurface();
+    errorTimer = setTimeout(() => {
+      clearError();
+    }, 8000);
   }
 
   function closeArtifact() {
@@ -168,6 +184,7 @@ export function createVoiceExceptions({ approvalRoot, errorRoot, artifactRoot, a
     });
     if (buttons.children.length) card.append(buttons);
     approvalRoot.append(card);
+    syncExceptionSurface();
   }
 
   function renderTaskInteraction(response) {
@@ -221,6 +238,7 @@ export function createVoiceExceptions({ approvalRoot, errorRoot, artifactRoot, a
     if (buttons.children.length) card.append(buttons);
     else card.append(element("p", "empty-choice", "目前沒有可用選項。"));
     approvalRoot.append(card);
+    syncExceptionSurface();
     return true;
   }
 
@@ -235,18 +253,19 @@ export function createVoiceExceptions({ approvalRoot, errorRoot, artifactRoot, a
     button.addEventListener("click", () => openArtifact(receipt));
     card.append(button);
     approvalRoot.append(card);
+    syncExceptionSurface();
   }
 
   function renderResponse(response) {
     clearError();
     if (!renderTaskInteraction(response)) renderApproval(response);
     if (response?.receipt || response?.artifact) renderReceipt(response.receipt || response.artifact);
+    syncExceptionSurface();
   }
 
   artifactRoot?.querySelectorAll("[data-artifact-close]").forEach((button) => button.addEventListener("click", closeArtifact));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && artifactRoot && !artifactRoot.hidden) closeArtifact();
   });
-
   return { clearError, renderError, renderResponse, openArtifact, closeArtifact };
 }

@@ -24,6 +24,109 @@ function responseAudioUrl(payload) {
   return typeof speech?.url === "string" && speech.url ? speech.url : null;
 }
 
+const DISPLAY_COPY = {
+  "zh-Hant": {
+    states: {
+      ready: ["準備好了", "點按小澳開始說話"],
+      "requesting-permission": ["正在準備麥克風", "請允許麥克風權限"],
+      listening: ["小澳正在聆聽", "請自然說話，停頓後便會回應"],
+      speaking: ["小澳正在聆聽", "繼續說話，或點按頭像停止"],
+      stopping: ["正在完成這一輪", "正在整理你的語音"],
+      captured: ["正在傳送", "小澳正在接收你的語音"],
+      processing: ["小澳在思考中。", "正在整理你的需要"],
+      "speaking-response": ["小澳正在回應。", "點按小澳即可中斷"],
+      "audio-error": ["未能播放聲音", "請檢查輸出音量後再試"],
+      "permission-denied": ["麥克風已被封鎖", "請允許麥克風權限後再試"],
+      unsupported: ["正在使用瀏覽器語音", "粵語語音辨識備援已啟用"],
+      error: ["暫時未能完成", "請點按小澳再試一次"],
+    },
+    captions: { user: "你", assistant: "小澳", separator: "：" },
+    system: {
+      healthChecking: "正在連線",
+      healthOnline: "服務可用",
+      healthOffline: "服務暫不可用",
+      connectionChecking: "正在檢查語音服務",
+      voiceCloud: "雲端語音已就緒",
+      voiceFallback: "瀏覽器語音備援",
+      voiceUnavailable: "語音需要設定",
+      middlewareOffline: "服務未連線",
+      serviceLabel: "服務",
+      serviceChecking: "連線中",
+      serviceOnline: "已連線",
+      serviceOffline: "離線",
+      voiceLabel: "語音",
+      voiceChecking: "檢查中",
+      microphoneLabel: "麥克風",
+      microphone: {
+        ready: "待命",
+        "requesting-permission": "等待權限",
+        listening: "聆聽中",
+        speaking: "聆聽中",
+        stopping: "處理中",
+        captured: "處理中",
+        processing: "處理中",
+        "speaking-response": "播放中",
+        unsupported: "瀏覽器辨識",
+        "permission-denied": "已封鎖",
+        "audio-error": "需要注意",
+        error: "需要注意",
+      },
+      avatarAction: "點按小澳開始或停止語音",
+      languageControl: "顯示語言",
+    },
+  },
+  en: {
+    states: {
+      ready: ["Ready", "Tap Ponte to talk"],
+      "requesting-permission": ["Microphone access", "Allow microphone access to begin"],
+      listening: ["Ponte is listening", "Speak naturally, then pause"],
+      speaking: ["Ponte is listening", "Keep speaking or tap the avatar to stop"],
+      stopping: ["Finishing this turn", "Preparing your voice request"],
+      captured: ["Sending", "Ponte is receiving your voice"],
+      processing: ["Ponte is thinking.", "Organising what you need"],
+      "speaking-response": ["Ponte is replying.", "Tap Ponte to interrupt"],
+      "audio-error": ["Audio unavailable", "Check your output volume and try again"],
+      "permission-denied": ["Microphone blocked", "Allow microphone access and try again"],
+      unsupported: ["Browser voice active", "Cantonese recognition fallback is enabled"],
+      error: ["Something went wrong", "Tap Ponte to try again"],
+    },
+    captions: { user: "You", assistant: "Ponte", separator: ": " },
+    system: {
+      healthChecking: "Connecting",
+      healthOnline: "Service available",
+      healthOffline: "Service unavailable",
+      connectionChecking: "Checking voice service",
+      voiceCloud: "Cloud voice ready",
+      voiceFallback: "Browser voice fallback",
+      voiceUnavailable: "Voice setup needed",
+      middlewareOffline: "Service offline",
+      serviceLabel: "Service",
+      serviceChecking: "Connecting",
+      serviceOnline: "Connected",
+      serviceOffline: "Offline",
+      voiceLabel: "Voice",
+      voiceChecking: "Checking",
+      microphoneLabel: "Microphone",
+      microphone: {
+        ready: "Standby",
+        "requesting-permission": "Awaiting access",
+        listening: "Listening",
+        speaking: "Listening",
+        stopping: "Processing",
+        captured: "Processing",
+        processing: "Processing",
+        "speaking-response": "Playing",
+        unsupported: "Browser recognition",
+        "permission-denied": "Blocked",
+        "audio-error": "Needs attention",
+        error: "Needs attention",
+      },
+      avatarAction: "Tap Ponte to start or stop voice",
+      languageControl: "Display language",
+    },
+  },
+};
+
 export function startPonteApp() {
   const client = new MiddlewareClient();
   const sessionId = makeSessionId();
@@ -31,43 +134,62 @@ export function startPonteApp() {
   const avatar = byId("ponte-avatar");
   const voiceState = byId("voice-state");
   const meterFill = byId("voice-meter-fill");
-  const stopAudioButton = byId("stop-audio-button");
   const voiceStatusLabel = byId("voice-status-label");
   const voiceStatusHint = byId("voice-status-hint");
   const captionLine = byId("caption-line");
-  const visibleVoiceStates = {
-    ready: ["Ready", "Tap Ponte to talk"],
-    "requesting-permission": ["Microphone access", "Allow microphone access to begin"],
-    listening: ["Listening", "Speak naturally, then pause"],
-    speaking: ["Listening", "Keep speaking or tap to stop"],
-    stopping: ["Finishing turn", "Preparing your request"],
-    captured: ["Sending", "Ponte is receiving your voice"],
-    processing: ["Thinking", "Ponte is checking the safest next step"],
-    "speaking-response": ["Ponte is replying", "Tap the avatar to interrupt"],
-    "audio-error": ["Audio blocked", "Check your output volume, then try again"],
-    "permission-denied": ["Microphone blocked", "Enable microphone access and try again"],
-    unsupported: ["Browser fallback", "Using browser speech recognition"],
-    error: ["Something went wrong", "Tap Ponte to try again"],
-  };
+  const serviceStatusLabel = byId("service-status-label");
+  const serviceStatusValue = byId("service-status-value");
+  const voicePathLabel = byId("voice-path-label");
+  const voicePathValue = byId("voice-path-value");
+  const microphoneStatusLabel = byId("microphone-status-label");
+  const microphoneStatusValue = byId("microphone-status-value");
   let activeAudio = null;
   let activeRequest = null;
   let latestTurn = 0;
   let recordedTranscript = "";
   let recognitionOnly = false;
   let backendVoiceReady = false;
+  let activeSpeechTurn = 0;
+  let displayLocale = "zh-Hant";
+  let currentState = "ready";
+  let currentCaption = null;
+  let captionTimer = null;
+  let healthSnapshot = { reachable: null, voiceReady: null };
 
-  function setCaption(target, text, label) {
-    if (!target) return;
+  function copy() {
+    return DISPLAY_COPY[displayLocale];
+  }
+
+  function renderCaption() {
+    if (!captionLine || !currentCaption?.text) {
+      if (captionLine) captionLine.textContent = "";
+      return;
+    }
+    const captions = copy().captions;
+    captionLine.textContent = `${captions[currentCaption.role]}${captions.separator}${currentCaption.text}`;
+  }
+
+  function setCaption(role, text) {
     const value = String(text || "").trim();
-    target.textContent = value ? `${label}：${value}` : "";
+    clearTimeout(captionTimer);
+    captionTimer = null;
+    currentCaption = value ? { role, text: value } : null;
+    renderCaption();
+    if (value) {
+      captionTimer = setTimeout(() => {
+        currentCaption = null;
+        captionTimer = null;
+        renderCaption();
+      }, 8000);
+    }
   }
 
   function showUserSpeech(text) {
-    setCaption(captionLine, text, "你");
+    setCaption("user", text);
   }
 
   function showPonteReply(text) {
-    setCaption(captionLine, text, "Ponte");
+    setCaption("assistant", text);
   }
 
   // A project can provide another same-origin asset without changing markup.
@@ -75,36 +197,72 @@ export function startPonteApp() {
   if (typeof configuredAvatar === "string" && configuredAvatar.startsWith("/")) avatar.src = configuredAvatar;
   avatar.addEventListener("error", () => { avatar.src = avatar.dataset.defaultAvatar; }, { once: true });
 
+  function renderSystemStatus() {
+    const system = copy().system;
+    const health = byId("health-status");
+    const connection = byId("connection-label");
+    const reachable = healthSnapshot.reachable;
+    const voiceReady = healthSnapshot.voiceReady;
+
+    health.textContent = reachable === null
+      ? system.healthChecking
+      : (reachable ? system.healthOnline : system.healthOffline);
+    health.classList.toggle("is-offline", reachable === false);
+    connection.textContent = reachable === null
+      ? system.connectionChecking
+      : (!reachable
+        ? system.middlewareOffline
+        : (voiceReady ? system.voiceCloud : (speech.supported ? system.voiceFallback : system.voiceUnavailable)));
+
+    serviceStatusLabel.textContent = system.serviceLabel;
+    serviceStatusValue.textContent = reachable === null
+      ? system.serviceChecking
+      : (reachable ? system.serviceOnline : system.serviceOffline);
+    voicePathLabel.textContent = system.voiceLabel;
+    voicePathValue.textContent = reachable === null
+      ? system.voiceChecking
+      : (!reachable
+        ? system.middlewareOffline
+        : (voiceReady ? system.voiceCloud : (speech.supported ? system.voiceFallback : system.voiceUnavailable)));
+    microphoneStatusLabel.textContent = system.microphoneLabel;
+    microphoneStatusValue.textContent = system.microphone[currentState] || system.microphone.ready;
+  }
+
   function setState(state, { level = null } = {}) {
+    currentState = state;
     document.body.dataset.voiceState = state;
-    ponteButton.setAttribute("aria-pressed", String(["requesting-permission", "listening", "speaking", "processing"].includes(state)));
-    const labels = {
-      ready: "點按 Ponte，開始說話",
-      "requesting-permission": "正在準備麥克風…",
-      listening: "我正在聽",
-      speaking: "請繼續說，我會在你停下後回應",
-      stopping: "正在整理你的語音…",
-      captured: "正在傳送你的語音…",
-      processing: "Ponte 正在思考…",
-      "speaking-response": "Ponte 正在回應",
-      "permission-denied": "未能使用麥克風。請允許權限後再試一次。",
-      unsupported: "此瀏覽器沒有錄音功能，正使用語音辨識備援。",
-      error: "暫時未能完成，請再點按 Ponte 重試。",
-      "audio-error": "瀏覽器未能播放聲音。請檢查音量後再試。",
-    };
-    voiceState.textContent = labels[state] || labels.ready;
-    const [visibleLabel, visibleHint] = visibleVoiceStates[state] || visibleVoiceStates.ready;
-    voiceState.textContent = `${visibleLabel}. ${visibleHint}`;
+    ponteButton.setAttribute("aria-pressed", String(["requesting-permission", "listening", "speaking", "processing", "speaking-response"].includes(state)));
+    const [visibleLabel, visibleHint] = copy().states[state] || copy().states.ready;
+    voiceState.textContent = `${visibleLabel} ${visibleHint}`;
     voiceStatusLabel.textContent = visibleLabel;
     voiceStatusHint.textContent = visibleHint;
+    microphoneStatusValue.textContent = copy().system.microphone[state] || copy().system.microphone.ready;
     if (level !== null) meterFill.style.transform = `scaleX(${Math.max(0.03, Math.min(1, level))})`;
+  }
+
+  function setDisplayLocale(locale) {
+    if (!DISPLAY_COPY[locale]) return;
+    displayLocale = locale;
+    document.documentElement.lang = locale;
+    byId("language-toggle").setAttribute("aria-label", copy().system.languageControl);
+    document.querySelectorAll("[data-locale]").forEach((button) => {
+      const active = button.dataset.locale === locale;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    ponteButton.setAttribute("aria-label", copy().system.avatarAction);
+    avatar.alt = displayLocale === "zh-Hant" ? "小澳" : "Ponte";
+    byId("avatar-action-label").textContent = copy().system.avatarAction;
+    setState(currentState);
+    renderSystemStatus();
+    renderCaption();
   }
 
   function stopPlayback() {
     activeAudio?.pause();
     if (activeAudio) activeAudio.currentTime = 0;
     activeAudio = null;
-    stopAudioButton.hidden = true;
+    activeSpeechTurn = 0;
     speech.stopSpeaking();
   }
 
@@ -116,15 +274,15 @@ export function startPonteApp() {
 
   async function playResponse(payload, turn) {
     if (turn !== latestTurn) return;
+    const message = payload?.result?.assistant_message || payload?.assistant_message;
+    showPonteReply(message);
     const audioUrl = responseAudioUrl(payload);
     if (audioUrl) {
       const audio = new Audio(client.absoluteUrl(audioUrl));
       activeAudio = audio;
-      stopAudioButton.hidden = false;
       audio.addEventListener("ended", () => {
         if (activeAudio === audio) {
           activeAudio = null;
-          stopAudioButton.hidden = true;
           setState("ready");
         }
       }, { once: true });
@@ -136,18 +294,18 @@ export function startPonteApp() {
         // User agents may block remote audio; speech synthesis below is the fallback.
       }
     }
-    const message = payload?.result?.assistant_message || payload?.assistant_message;
-    showPonteReply(message);
-    if (message && speech.speak(message, { onEnd: () => {
+    activeSpeechTurn = turn;
+    const speechStarted = message && speech.speak(message, { onEnd: () => {
       if (turn === latestTurn) {
-        stopAudioButton.hidden = true;
+        activeSpeechTurn = 0;
         setState("ready");
       }
-    } })) {
-      stopAudioButton.hidden = false;
+    } });
+    if (speechStarted) {
       setState("speaking-response");
       return;
     }
+    activeSpeechTurn = 0;
     if (turn === latestTurn) {
       exceptions.renderError({ message: "未能播放 Ponte 的聲音。請檢查瀏覽器音訊權限與系統輸出裝置。" });
       setState("audio-error");
@@ -217,8 +375,8 @@ export function startPonteApp() {
   async function handleAction(action) {
     const kind = action?.kind || action?.action || action?.id;
     if (!kind) return;
+    interruptCurrentTurn();
     const turn = ++latestTurn;
-    activeRequest?.abort();
     const controller = new AbortController();
     activeRequest = controller;
     exceptions.clearError();
@@ -255,7 +413,7 @@ export function startPonteApp() {
     onStateChange(state) {
       if (recognitionOnly && state === "listening") setState("listening");
       if (recognitionOnly && state === "permission-denied") setState("permission-denied");
-      if (state === "audio-error") {
+      if (state === "audio-error" && activeSpeechTurn === latestTurn && document.body.dataset.voiceState === "speaking-response") {
         exceptions.renderError({ message: "瀏覽器未能播放聲音。請檢查系統輸出裝置與音量，然後再試一次。" });
         setState("audio-error");
       }
@@ -311,32 +469,39 @@ export function startPonteApp() {
   ponteButton.addEventListener("click", () => {
     // A user gesture is required before some browsers allow speech/audio output.
     speech.unlock?.();
-    if (["listening", "speaking", "requesting-permission"].includes(document.body.dataset.voiceState)) {
+    const state = document.body.dataset.voiceState;
+    if (state === "speaking-response") {
+      latestTurn += 1;
+      interruptCurrentTurn();
+      setState("ready");
+      return;
+    }
+    if (["listening", "speaking", "requesting-permission"].includes(state)) {
       capture.stop("manual");
       speech.stop();
       return;
     }
     startVoiceTurn();
   });
-  stopAudioButton.addEventListener("click", () => { stopPlayback(); setState("ready"); });
+
+  document.querySelectorAll("[data-locale]").forEach((button) => {
+    button.addEventListener("click", () => setDisplayLocale(button.dataset.locale));
+  });
 
   client.health()
     .then((payload) => {
-      const health = byId("health-status");
       const reachable = payload.backend_reachable !== false;
       backendVoiceReady = payload.voice_ready !== false;
-      byId("connection-label").textContent = !reachable ? "Middleware offline" : (backendVoiceReady ? "Voice ready" : (speech.supported ? "Browser voice fallback" : "Voice setup needed"));
-      health.textContent = reachable ? "服務可用" : "服務暫不可用";
-      health.classList.toggle("is-offline", !reachable);
+      healthSnapshot = { reachable, voiceReady: backendVoiceReady };
+      renderSystemStatus();
     })
     .catch(() => {
-      const health = byId("health-status");
-      health.textContent = "服務暫不可用";
-      byId("connection-label").textContent = "Middleware offline";
-      health.classList.add("is-offline");
+      backendVoiceReady = false;
+      healthSnapshot = { reachable: false, voiceReady: false };
+      renderSystemStatus();
     });
 
-  setState("ready");
+  setDisplayLocale("zh-Hant");
   return { client, sessionId, capture, speech, submitVoice, handleAction, interruptCurrentTurn };
 }
 

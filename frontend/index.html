@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#eef4ff" />
+    <meta name="theme-color" content="#f5f5f7" />
     <meta name="color-scheme" content="light" />
     <title>Ponte 語音服務</title>
     <link rel="stylesheet" href="/styles.css" />
@@ -11,27 +11,37 @@
   <body class="voice-app">
     <header class="voice-header">
       <a class="brand-block" href="/" aria-label="Ponte home">Ponte</a>
-      <span id="health-status" class="health-status" role="status" aria-live="polite">
-        <i aria-hidden="true"></i><span id="health-label">Connecting</span>
-      </span>
-      <span id="connection-label" class="connection-label" role="status" aria-live="polite">Connecting…</span>
+      <div class="header-controls">
+        <div class="connection-stack">
+          <span id="health-status" class="health-status" role="status" aria-live="polite">正在連線</span>
+          <span id="connection-label" class="connection-label">正在檢查語音服務</span>
+        </div>
+        <div id="language-toggle" class="language-toggle" role="group" aria-label="顯示語言">
+          <button class="language-option is-active" type="button" data-locale="zh-Hant" aria-pressed="true">繁中</button>
+          <button class="language-option" type="button" data-locale="en" aria-pressed="false">ENG</button>
+        </div>
+      </div>
     </header>
 
     <main class="voice-shell">
       <section class="ponte-stage" aria-labelledby="voice-title">
         <h1 id="voice-title" class="sr-only">Ponte 語音服務</h1>
-        <button id="ponte-button" class="ponte-button" type="button" aria-pressed="false" aria-describedby="voice-state">
+        <button id="ponte-button" class="ponte-button" type="button" aria-label="點按小澳開始說話" aria-pressed="false" aria-describedby="voice-state">
           <span class="ponte-rings" aria-hidden="true"><i></i><i></i><i></i></span>
           <img id="ponte-avatar" src="/ponte2.jpg" alt="Ponte" data-default-avatar="/ponte2.jpg" />
-          <span class="sr-only">Start or stop voice turn</span>
+          <span id="avatar-action-label" class="sr-only">點按開始或停止語音</span>
         </button>
-        <p id="voice-state" class="voice-state" role="status" aria-live="polite">Ready. Tap Ponte to talk.</p>
+        <p id="voice-state" class="voice-state" role="status" aria-live="polite">準備好了。點按小澳開始說話。</p>
         <div class="voice-status-panel" aria-hidden="true">
-          <span id="voice-status-label" class="voice-status-label">Ready</span>
-          <span id="voice-status-hint" class="voice-status-hint">Tap Ponte to talk</span>
+          <span id="voice-status-label" class="voice-status-label">準備好了</span>
+          <span id="voice-status-hint" class="voice-status-hint">點按小澳開始說話</span>
         </div>
         <div class="voice-meter" aria-hidden="true"><span id="voice-meter-fill"></span></div>
-        <button id="stop-audio-button" class="stop-audio" type="button" hidden>Stop reply</button>
+        <div id="operational-status" class="operational-status">
+          <span class="status-chip"><span id="service-status-label" class="status-chip-label">服務</span><strong id="service-status-value">連線中</strong></span>
+          <span class="status-chip"><span id="voice-path-label" class="status-chip-label">語音</span><strong id="voice-path-value">檢查中</strong></span>
+          <span class="status-chip"><span id="microphone-status-label" class="status-chip-label">麥克風</span><strong id="microphone-status-value">待命</strong></span>
+        </div>
       </section>
 
       <section id="voice-exceptions" class="voice-exceptions" aria-live="polite" aria-label="Approval, receipt, and recovery messages">
