@@ -50,4 +50,4 @@
 - [x] Run `python -m unittest discover -v` and record the result: 219 tests ran, 217 passed; the 2 failures are pre-existing appointment-branch failures (`tests.core.test_core_helpers` timezone expectation and `tests.test_middleware_integration` expanded-service expectation).
 - [x] Run bundled Node syntax checks for all four frontend modules and `git diff --check`.
 - [x] Review the final diff for contract preservation and unrelated changes; appointment-related staged/unstaged files remain excluded from this feature.
-- [ ] Commit only this feature's implementation files; preserve unrelated staged appointment changes.
+- [x] Commit only this feature's implementation files; preserve unrelated staged appointment changes.
