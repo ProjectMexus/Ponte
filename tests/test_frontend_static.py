@@ -200,6 +200,23 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("webkitSpeechRecognition", js)
         self.assertIn("zh-HK", js)
         self.assertIn("speechSynthesis", js)
+        self.assertIn("try", js)
+        self.assertIn("catch", js)
+
+    def test_frontend_supports_written_and_spoken_reply_toggle(self):
+        html = Path("frontend/index.html").read_text(encoding="utf-8")
+        app = Path("frontend/app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="speak-stop-button"', html)
+        self.assertIn('aria-pressed="true"', html)
+        self.assertIn("自動朗讀：開", html)
+        self.assertIn("assistant_speech_message", app)
+        self.assertIn("autoSpeakEnabled", app)
+        self.assertIn("speech.stopSpeaking()", app)
+        self.assertIn(
+            "response.assistant_speech_message || response.assistant_message",
+            app,
+        )
 
     def test_app_wires_client_view_and_speech(self):
         js = Path("frontend/app.js").read_text(encoding="utf-8")

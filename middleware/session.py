@@ -9,6 +9,7 @@ from threading import Lock
 from typing import Any, Sequence
 
 from .contracts import ToolCall
+from .speech import to_cantonese_spoken
 
 
 @dataclass
@@ -104,6 +105,7 @@ def build_response(
     response: dict[str, Any] = {
         "session_id": state.session_id,
         "assistant_message": assistant_message,
+        "assistant_speech_message": to_cantonese_spoken(assistant_message),
         "task_state": state.task_state,
         "current_step": state.current_step,
         "steps": deepcopy(state.steps),

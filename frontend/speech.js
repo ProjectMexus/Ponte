@@ -55,13 +55,17 @@ export function createSpeechController({ onTranscript, onStateChange } = {}) {
       const speechSynthesis = globalThis.speechSynthesis;
       const Utterance = globalThis.SpeechSynthesisUtterance;
       if (!text || !speechSynthesis || !Utterance) return false;
-      speechSynthesis.cancel();
-      const utterance = new Utterance(text);
-      utterance.lang = "zh-HK";
-      utterance.rate = 0.92;
-      utterance.pitch = 1;
-      speechSynthesis.speak(utterance);
-      return true;
+      try {
+        speechSynthesis.cancel();
+        const utterance = new Utterance(text);
+        utterance.lang = "zh-HK";
+        utterance.rate = 0.92;
+        utterance.pitch = 1;
+        speechSynthesis.speak(utterance);
+        return true;
+      } catch (error) {
+        return false;
+      }
     },
     stopSpeaking() {
       globalThis.speechSynthesis?.cancel();

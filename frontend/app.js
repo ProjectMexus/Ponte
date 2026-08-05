@@ -17,10 +17,12 @@ export function startPonteApp() {
   const messageForm = byId("message-form");
   const sendButton = byId("send-button");
   const micButton = byId("mic-button");
+  const autoSpeakButton = byId("speak-stop-button");
   const speechStatus = byId("speech-status");
   let requestPending = false;
   let inputSource = "text";
   let activeTaskId = null;
+  let autoSpeakEnabled = true;
 
   const view = createInteractionView({
     conversationRoot: byId("conversation-list"),
@@ -63,6 +65,16 @@ export function startPonteApp() {
     },
   });
 
+  function renderAutoSpeakState() {
+    autoSpeakButton.setAttribute("aria-pressed", String(autoSpeakEnabled));
+    autoSpeakButton.textContent = `自動朗讀：${autoSpeakEnabled ? "開" : "關"}`;
+  }
+
+  function speakResponse(response) {
+    if (!autoSpeakEnabled) return;
+    speech.speak(response.assistant_speech_message || response.assistant_message);
+  }
+
   function setPending(pending) {
     requestPending = pending;
     sendButton.disabled = pending;
@@ -85,7 +97,7 @@ export function startPonteApp() {
     try {
       const response = await client.sendMessage({ session_id: sessionId, message: trimmed, source });
       view.updateTask(taskId, response);
-      speech.speak(response.assistant_message);
+      speakResponse(response);
     } catch (error) {
       view.failTask(taskId, error);
       handleError(error);
@@ -116,7 +128,7 @@ export function startPonteApp() {
         payload: action.payload || {},
       });
       view.updateTask(taskId, response);
-      speech.speak(response.assistant_message);
+      speakResponse(response);
     } catch (error) {
       view.failTask(taskId, error);
       handleError(error);
@@ -150,7 +162,12 @@ export function startPonteApp() {
     }
   });
 
-  byId("speak-stop-button").addEventListener("click", () => speech.stopSpeaking());
+  autoSpeakButton.addEventListener("click", () => {
+    autoSpeakEnabled = !autoSpeakEnabled;
+    if (!autoSpeakEnabled) speech.stopSpeaking();
+    renderAutoSpeakState();
+  });
+  renderAutoSpeakState();
 
   document.querySelectorAll("[data-quick-message]").forEach((button) => {
     button.addEventListener("click", () => sendMessage(button.dataset.quickMessage, "text"));
