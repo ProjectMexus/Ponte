@@ -31,6 +31,17 @@ def post_interaction(opener, base_url, session_id, interaction_id, event):
 
 
 def action_event(response, *, decision=None):
+    # First check for actions embedded in fields
+    fields = response["workspace"].get("fields", [])
+    if isinstance(fields, list):
+        for field in fields:
+            if isinstance(field, dict) and "action" in field:
+                event = field["action"].get("event", {})
+                if decision is None:
+                    return event
+                if event.get("decision") == decision:
+                    return event
+    # Fall back to workspace.actions
     actions = response["workspace"]["actions"]
     if decision is None:
         return actions[0]["event"]
@@ -88,7 +99,10 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
             self.opener, base_url, "S-1", "INT-1", utterance("我想預約醫療服務"),
         )
         self.assertEqual(first["workspace"]["view"], "service_selection")
-        self.assertTrue(first["workspace"]["actions"])
+        # Actions are now embedded in fields for selection views
+        fields = first["workspace"].get("fields", [])
+        has_actions = any(isinstance(f, dict) and "action" in f for f in fields)
+        self.assertTrue(has_actions or first["workspace"]["actions"])
         assert_no_legacy_fields(self, first)
         task_id = first["task"]["task_id"]
 
@@ -125,10 +139,14 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
         cancelled_start = post_interaction(
             self.opener, base_url, "S-2", "INT-6", utterance("我想預約醫療服務"),
         )
-        self.assertEqual(
-            {action["event"]["service_id"] for action in cancelled_start["workspace"]["actions"]},
-            {"SERVICE-US-001", "SERVICE-PT-001", "SERVICE-ECHO-001"},
-        )
+        # Actions are now embedded in fields for selection views
+        fields = cancelled_start["workspace"].get("fields", [])
+        service_ids = {
+            field["action"]["event"]["service_id"]
+            for field in fields
+            if isinstance(field, dict) and field.get("action", {}).get("event", {}).get("type") == "service_selected"
+        }
+        self.assertEqual(service_ids, {"SERVICE-US-001", "SERVICE-PT-001", "SERVICE-ECHO-001"})
         cancelled_slots = post_interaction(
             self.opener, base_url, "S-2", "INT-7", action_event(cancelled_start),
         )

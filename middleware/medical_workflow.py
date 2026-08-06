@@ -430,39 +430,9 @@ class MedicalWorkflow:
         task_id = task.get("task_id")
         facts = task.get("facts") if isinstance(task.get("facts"), Mapping) else {}
         actions: list[dict[str, Any]] = []
-        if response_intent == "select_service":
-            for service in facts.get("services", []):
-                if isinstance(service, Mapping) and isinstance(service.get("id"), str):
-                    # Generate a more specific label with service name
-                    service_name = service.get("name") or service.get("display") or "服務"
-                    label = f"選擇 {service_name}"
-                    actions.append(self._action(label, {
-                        "type": "service_selected",
-                        "action_id": _identifier("ACT"),
-                        "task_id": task_id,
-                        "service_id": service["id"],
-                        "date_from": facts.get("date_from", _today()),
-                        "date_to": facts.get("date_to", _date_plus(14)),
-                    }))
-        elif response_intent == "select_slot":
-            for slot in facts.get("slots", []):
-                if isinstance(slot, Mapping) and isinstance(slot.get("id"), str):
-                    # Generate a more specific label with date/time
-                    start = slot.get("start", "")
-                    if isinstance(start, str) and len(start) >= 16:
-                        # Extract MM-DD HH:MM from ISO datetime
-                        date_part = start[5:10].replace("-", "/")
-                        time_part = start[11:16]
-                        label = f"選擇 {date_part} {time_part}"
-                    else:
-                        label = "選擇時段"
-                    actions.append(self._action(label, {
-                        "type": "slot_selected",
-                        "action_id": _identifier("ACT"),
-                        "task_id": task_id,
-                        "slot_id": slot["id"],
-                    }))
-        elif response_intent == "request_confirmation":
+        # select_service and select_slot actions are now embedded in field rows
+        # No separate action buttons needed for these intents
+        if response_intent == "request_confirmation":
             confirmation = task.get("pending_confirmation")
             if isinstance(confirmation, Mapping):
                 for decision, label in (

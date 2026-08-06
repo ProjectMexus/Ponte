@@ -24,6 +24,19 @@ def utterance(content):
 
 
 def action_event(response, *, decision=None, service_id=None):
+    # First check for actions embedded in fields
+    fields = response["workspace"].get("fields", [])
+    if isinstance(fields, list):
+        for field in fields:
+            if isinstance(field, dict) and "action" in field:
+                event = field["action"].get("event", {})
+                if decision is not None and event.get("decision") == decision:
+                    return event
+                if service_id is not None and event.get("service_id") == service_id:
+                    return event
+                if decision is None and service_id is None:
+                    return event
+    # Fall back to workspace.actions
     actions = response["workspace"]["actions"]
     if decision is not None:
         return next(item["event"] for item in actions if item["event"].get("decision") == decision)

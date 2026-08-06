@@ -12,6 +12,7 @@ from copy import deepcopy
 from typing import Any
 
 from .interaction_contracts import CanonicalInteractionResult
+from .medical_workflow import _today, _date_plus
 from .speech import to_cantonese_spoken
 
 
@@ -296,8 +297,8 @@ def _service_selection_fields(facts: Mapping[str, Any], task_id: str) -> list[di
                 "action_id": f"ACT-{task_id}-SVC-{i}",
                 "task_id": task_id,
                 "service_id": svc.get("id", ""),
-                "date_from": facts.get("date_from", ""),
-                "date_to": facts.get("date_to", ""),
+                "date_from": facts.get("date_from") or _today(),
+                "date_to": facts.get("date_to") or _date_plus(14),
             }
         }
         fields.append(_field(f"service_{i}", name, value, action=action))
