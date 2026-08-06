@@ -141,19 +141,24 @@ class FullStackIntegrationTests(unittest.TestCase):
 
     def test_natural_language_cash_sharing_reaches_backend(self):
         response = self.post_middleware(
-            "/api/interactions/message",
-            {
-                "session_id": "FULL-CASH-1",
-                "message": "我想查現金分享計劃",
-                "source": "text",
-            },
+            "/api/interactions",
+            interaction_body(
+                "FULL-CASH-1",
+                "FULL-CASH-INT-1",
+                utterance("我想查現金分享計劃"),
+            ),
         )
-        self.assertEqual(response["task_state"], "completed")
-        self.assertEqual(
-            [event["tool_name"] for event in response["tool_events"]],
-            ["one_account.get_cash_sharing_plan"],
-        )
-        self.assertEqual(response["data"]["cash_sharing_plan"]["plan"]["year"], 2026)
+        self.assertEqual(response["task"]["type"], "cash_sharing_query")
+        self.assertEqual(response["task"]["status"], "completed")
+        self.assertEqual(response["task"]["current_step"], "complete")
+        self.assertEqual(response["workspace"]["view"], "cash_sharing_summary")
+        self.assertEqual(response["task"]["facts"]["plan"]["year"], 2026)
+        self.assertEqual(response["task"]["facts"]["plan"]["payout"]["amount"], 10000)
+        self.assertEqual(response["workspace"]["actions"], [])
+        self.assertIsNone(response["receipt"])
+        self.assertNotIn("appointment", response["workspace"]["view"])
+        for removed in ("assistant_message", "task_state", "current_step", "tool_events"):
+            self.assertNotIn(removed, response)
 
     def test_duplicate_booking_recovery_then_alternative_service_books(self):
         def interact(session_id, interaction_id, event):

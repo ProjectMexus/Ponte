@@ -88,7 +88,10 @@ class InteractionController:
                 "醫療預約已改用 /api/interactions 事件合約，legacy 文字路徑不再執行醫療工具。",
             )
         if intent.is_cash_sharing:
-            return self._handle_cash_sharing(state)
+            raise LegacyInteractionContractError(
+                "INTERACTION_EVENT_REQUIRED",
+                "現金分享查詢已改用 /api/interactions 事件合約，legacy 文字路徑不再執行一戶通工具。",
+            )
         if intent.is_elderly_activity:
             return self._handle_elderly_activity(state)
         self._task_manager(state).transition("idle", "welcome")
@@ -97,22 +100,6 @@ class InteractionController:
             "我可以協助查詢醫療預約、可預約服務和時段。請告訴我你想辦理的事項。",
             [{"action": "human_help", "label": "轉接人工協助"}],
         )
-
-    def _handle_cash_sharing(self, state: SessionState) -> dict[str, Any]:
-        manager = self._task_manager(state)
-        manager.transition("querying", "load_cash_sharing_plan")
-        result = self._run_tool(
-            state,
-            "one_account.get_cash_sharing_plan",
-            "load_cash_sharing_plan",
-            {},
-        )
-        data = self._result_data(state, result, "load_cash_sharing_plan")
-        if data is None:
-            return build_response(state, "暫時無法查詢現金分享計劃，請稍後再試。", [])
-        state.data["cash_sharing_plan"] = data
-        manager.complete("cash_sharing_plan")
-        return build_response(state, "我已查到你的現金分享計劃資料。", [])
 
     def _handle_elderly_activity(self, state: SessionState) -> dict[str, Any]:
         manager = self._task_manager(state)

@@ -18,6 +18,7 @@ from ponte_logging import log_event
 
 from .contracts import InteractionActionRequest, InteractionRequest, ToolCall, ToolExecutionResult
 from .config import load_dotenv
+from .cash_sharing_workflow import CashSharingWorkflow
 from .controller import InteractionController, LegacyInteractionContractError
 from .diagnostics import DiagnosticCommandError
 from .execution import ExecutionPipeline, McpExecutionStage
@@ -94,10 +95,17 @@ class MiddlewareApplication:
             authorization,
             mock_user_id=mock_user_id,
         )
+        self.cash_workflow = CashSharingWorkflow(
+            self.pipeline,
+            patient_id,
+            authorization,
+            mock_user_id=mock_user_id,
+        )
         self.interaction_core = InteractionCore(
             self.sessions,
             self.medical_workflow,
             intent_recognizer=intent_recognizer,
+            cash_workflow=self.cash_workflow,
         )
         self.delivery_orchestrator = DeliveryOrchestrator()
         self.voice_turn_provider = voice_turn_provider or UnavailableVoiceTurnProvider()

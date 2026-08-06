@@ -125,18 +125,33 @@ class ServerTests(unittest.TestCase):
             "INVALID_DIAGNOSTIC_COMMAND",
         )
 
-    def test_message_workflow_passes_mock_user_id_to_mcp_context(self):
-        status, payload = self.request("POST", "/api/interactions/message", {
-            "session_id": "S-SERVER-CASH",
-            "message": "我想查現金分享計劃",
+    def test_canonical_cash_utterance_passes_mock_user_id_to_mcp_context(self):
+        status, payload = self.request("POST", "/api/interactions", {
+            "routing": {"session_id": "S-SERVER-CASH", "interaction_id": "INT-SERVER-CASH"},
+            "event": {"type": "user_utterance", "task_id": None, "content": "我想查現金分享計劃"},
         })
         self.assertEqual(status, 200)
-        self.assertEqual(payload["task_state"], "completed")
+        self.assertEqual(payload["task"]["type"], "cash_sharing_query")
         self.assertEqual(self.mcp_client.calls[-1][0], "one_account.get_cash_sharing_plan")
         self.assertEqual(
             self.mcp_client.calls[-1][1]["context"]["mock_user_id"],
             "USR-DEMO-001",
         )
+
+    def test_legacy_message_route_rejects_cash_workflow(self):
+        calls_before = len(self.mcp_client.calls)
+        with self.assertRaises(HTTPError) as raised:
+            self.request("POST", "/api/interactions/message", {
+                "session_id": "S-LEGACY-CASH",
+                "message": "我想查現金分享計劃",
+                "source": "text",
+            })
+        self.assertEqual(raised.exception.code, 400)
+        self.assertEqual(
+            json.loads(raised.exception.read())["error"]["code"],
+            "INTERACTION_EVENT_REQUIRED",
+        )
+        self.assertEqual(len(self.mcp_client.calls), calls_before)
 
     def test_malformed_json_is_safe_client_error(self):
         request = Request(self.base_url + "/api/interactions/message", data=b"{", method="POST", headers={"Content-Type": "application/json"})

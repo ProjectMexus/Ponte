@@ -83,6 +83,23 @@ class InteractionHttpTests(unittest.TestCase):
             self.assertNotIn(removed, final)
         self.assertNotIn("patient_id", json.dumps(final, ensure_ascii=False))
 
+    def test_voice_cash_utterance_returns_read_only_summary(self):
+        response = post_json(self.opener, self.url + "/api/interactions", self.event("INT-CASH-1", {
+            "type": "user_utterance",
+            "task_id": None,
+            "content": "我想查現金分享計劃",
+        }))
+        self.assertEqual(response["task"]["type"], "cash_sharing_query")
+        self.assertEqual(response["task"]["status"], "completed")
+        self.assertEqual(response["task"]["current_step"], "complete")
+        self.assertEqual(response["workspace"]["view"], "cash_sharing_summary")
+        self.assertEqual(response["workspace"]["actions"], [])
+        self.assertIsNone(response["receipt"])
+        self.assertIsNone(response["confirmation"])
+        self.assertEqual(response["task"]["facts"]["plan"]["year"], 2026)
+        for removed in ("assistant_message", "task_state", "current_step", "tool_events"):
+            self.assertNotIn(removed, response)
+
 
 if __name__ == "__main__":
     unittest.main()

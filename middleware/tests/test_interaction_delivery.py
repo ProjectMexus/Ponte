@@ -164,6 +164,93 @@ class InteractionDeliveryTests(unittest.TestCase):
         self.assertEqual(workspace["artifact"], receipt)
         self.assertEqual(result.to_dict(), before)
 
+    def test_cash_summary_projects_read_only_workspace_without_receipt(self):
+        facts = {
+            "plan": {
+                "plan_id": "CSP-2026",
+                "plan_name": "現金分享計劃",
+                "year": 2026,
+                "status": "OPEN",
+                "eligibility": {"eligible": True, "status": "ELIGIBLE"},
+                "payout": {
+                    "amount": 10000,
+                    "currency": "MOP",
+                    "payment_status": "SCHEDULED",
+                    "scheduled_date": "2026-09-30",
+                },
+                "last_updated_at": "2026-08-06T00:00:00+08:00",
+            },
+            "history": [],
+        }
+        result = result_for(
+            "cash_sharing_summary",
+            status="completed",
+            current_step="complete",
+            facts=facts,
+        )
+
+        workspace = WorkspaceProjector.project(result)
+        response = ResponseComposer.compose(result)
+
+        self.assertEqual(workspace["view"], "cash_sharing_summary")
+        self.assertEqual(workspace["actions"], [])
+        self.assertIsNone(workspace["artifact"])
+        self.assertEqual(
+            {field["key"] for field in workspace["fields"]},
+            {
+                "plan_name", "year", "plan_status", "eligibility",
+                "amount", "currency", "payment_status", "scheduled_date",
+                "last_updated_at",
+            },
+        )
+        self.assertIn("OPEN", response["display_text"])
+        self.assertIn("ELIGIBLE", response["display_text"])
+        self.assertIn("SCHEDULED", response["display_text"])
+        self.assertNotIn("預約已完成", response["display_text"])
+
+    def test_cash_recovery_projects_reason_and_server_actions(self):
+        event = {
+            "type": "recovery_action",
+            "action_id": "ACT-RETRY",
+            "task_id": "TASK-1",
+            "action": "retry",
+        }
+        result = result_for(
+            "cash_sharing_recovery",
+            current_step="load_cash_sharing_plan",
+            recovery={
+                "reason": "backend_unavailable",
+                "allowed_actions": ["retry", "human_help", "cancel"],
+            },
+            allowed_actions=[{"label": "再試一次", "event": event}],
+        )
+
+        workspace = WorkspaceProjector.project(result)
+        response = ResponseComposer.compose(result)
+
+        self.assertEqual(workspace["view"], "cash_sharing_recovery")
+        self.assertEqual(workspace["fields"][0]["key"], "reason")
+        self.assertEqual(workspace["actions"][0]["event"], event)
+        self.assertIn("重試", response["display_text"])
+
+    def test_cash_cancelled_task_is_not_projected_as_appointment(self):
+        result = CanonicalInteractionResult(
+            interaction_id="INT-1",
+            task={
+                "task_id": "TASK-1",
+                "type": "cash_sharing_query",
+                "status": "cancelled",
+                "current_step": "cancelled",
+            },
+            response_intent="cancelled",
+        )
+
+        workspace = WorkspaceProjector.project(result)
+        response = ResponseComposer.compose(result)
+
+        self.assertEqual(workspace["view"], "cash_sharing_summary")
+        self.assertNotIn("預約", response["display_text"])
+
     def test_tts_failure_isolated_from_canonical_result(self):
         result = result_for(
             "select_service",

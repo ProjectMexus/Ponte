@@ -22,6 +22,8 @@ _VIEW_TITLES = {
     "appointment_confirmation": "確認預約",
     "appointment_recovery": "處理預約問題",
     "appointment_completed": "預約完成",
+    "cash_sharing_summary": "現金分享計劃",
+    "cash_sharing_recovery": "處理現金分享查詢問題",
 }
 
 _SERVICE_INTENTS = frozenset({"select_service", "service_selection"})
@@ -110,6 +112,30 @@ def _detail_suffix(details: Mapping[str, str]) -> str:
     return "；".join(parts)
 
 
+def _cash_summary_text(facts: Mapping[str, Any]) -> str:
+    plan = _as_mapping(facts.get("plan"))
+    # Report the backend statuses verbatim; a completed read-only lookup must
+    # never claim registration, adjudication, or payout happened.
+    parts = ["我已查到你的現金分享計劃資料，這次只讀查詢已完成。"]
+    if plan.get("status") is not None:
+        parts.append(f"計劃狀態：{_text(plan['status'])}。")
+    eligibility = _as_mapping(plan.get("eligibility"))
+    if eligibility.get("status") is not None:
+        parts.append(f"資格狀態：{_text(eligibility['status'])}。")
+    payout = _as_mapping(plan.get("payout"))
+    if payout.get("payment_status") is not None:
+        parts.append(f"發放狀態：{_text(payout['payment_status'])}。")
+    return "".join(parts)
+
+
+def _cash_recovery_text(reason: Any) -> str:
+    return {
+        "backend_unavailable": "暫時未能查詢現金分享計劃，請稍後重試或選擇其他協助。",
+        "invalid_backend_response": "現金分享計劃服務的回覆不完整，請重試或選擇其他協助。",
+        "human_help_requested": "已記錄你需要人工協助，可隨時取消這次查詢。",
+    }.get(_normalised(reason), "暫時未能完成現金分享查詢，請選擇下一步。")
+
+
 class ResponseComposer:
     """Compose fixed, channel-neutral written and spoken response text."""
 
@@ -121,7 +147,12 @@ class ResponseComposer:
         status = _normalised(task.get("status"))
         details = _appointment_details(result)
 
-        if intent == "appointment_list" or "appointments" in facts:
+        if intent == "cash_sharing_summary":
+            display_text = _cash_summary_text(facts)
+        elif intent == "cash_sharing_recovery":
+            recovery = _as_mapping(result.recovery)
+            display_text = _cash_recovery_text(recovery.get("reason"))
+        elif intent == "appointment_list" or "appointments" in facts:
             display_text = "我已查到你的醫療預約。"
         elif status == "completed" or result.receipt is not None or intent in _COMPLETED_INTENTS:
             display_text = "預約已完成。"
@@ -129,7 +160,7 @@ class ResponseComposer:
             if receipt.get("receipt_id"):
                 display_text += f"參考編號：{_text(receipt['receipt_id'])}。"
         elif intent in _CANCELLED_INTENTS or status in {"cancelled", "canceled"}:
-            display_text = "已取消這次預約協助，沒有作出更改。"
+            display_text = "已取消這次協助，沒有作出更改。"
         elif result.recovery is not None or intent in _RECOVERY_INTENTS or status in {"recovery", "awaiting_recovery"}:
             recovery = _as_mapping(result.recovery)
             message = recovery.get("message") or recovery.get("explanation")
@@ -162,6 +193,12 @@ def _view_for(result: CanonicalInteractionResult) -> str:
     facts = _facts(result)
     status = _normalised(task.get("status"))
 
+    if intent == "cash_sharing_summary":
+        return "cash_sharing_summary"
+    if intent == "cash_sharing_recovery":
+        return "cash_sharing_recovery"
+    if _normalised(task.get("type")) == "cash_sharing_query":
+        return "cash_sharing_recovery" if result.recovery is not None else "cash_sharing_summary"
     if intent == "appointment_list" or "appointments" in facts:
         return "appointment_list"
     if status == "completed" or result.receipt is not None or intent in _COMPLETED_INTENTS:
@@ -202,8 +239,43 @@ def _appointment_fields(result: CanonicalInteractionResult) -> list[dict[str, An
     return [_field(key, label, details[key]) for key, label in labels if details.get(key)]
 
 
+def _cash_summary_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
+    plan = _as_mapping(facts.get("plan"))
+    fields: list[dict[str, Any]] = []
+    if plan.get("plan_name") is not None:
+        fields.append(_field("plan_name", "計劃名稱", plan["plan_name"]))
+    if plan.get("year") is not None:
+        fields.append(_field("year", "年度", plan["year"]))
+    if plan.get("status") is not None:
+        fields.append(_field("plan_status", "計劃狀態", plan["status"]))
+    eligibility = _as_mapping(plan.get("eligibility"))
+    if eligibility:
+        fields.append(_field("eligibility", "資格狀況", deepcopy(dict(eligibility))))
+    payout = _as_mapping(plan.get("payout"))
+    if payout.get("amount") is not None:
+        fields.append(_field("amount", "金額", payout["amount"]))
+    if payout.get("currency") is not None:
+        fields.append(_field("currency", "貨幣", payout["currency"]))
+    if payout.get("payment_status") is not None:
+        fields.append(_field("payment_status", "發放狀態", payout["payment_status"]))
+    if payout.get("scheduled_date") is not None:
+        fields.append(_field("scheduled_date", "預計發放日期", payout["scheduled_date"]))
+    if plan.get("last_updated_at") is not None:
+        fields.append(_field("last_updated_at", "最後更新", plan["last_updated_at"]))
+    return fields
+
+
 def _fields_for(result: CanonicalInteractionResult, view: str) -> list[dict[str, Any]]:
     facts = _facts(result)
+    if view == "cash_sharing_summary":
+        return _cash_summary_fields(facts)
+    if view == "cash_sharing_recovery":
+        recovery = _as_mapping(result.recovery)
+        fields = []
+        for key, label in (("reason", "原因"), ("message", "訊息"), ("explanation", "說明")):
+            if recovery.get(key) is not None:
+                fields.append(_field(key, label, recovery[key]))
+        return fields
     if view == "appointment_list":
         return [_field("appointments", "醫療預約", _selection_records(facts.get("appointments")))]
     if view == "service_selection":

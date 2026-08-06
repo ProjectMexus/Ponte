@@ -12,15 +12,6 @@ class RecordingPipeline:
 
     def dispatch(self, call):
         self.calls.append(call)
-        if call.name == "one_account.get_cash_sharing_plan":
-            return ToolExecutionResult(
-                call.name,
-                call.step_id,
-                True,
-                "REQ-6",
-                {"data": {"plan_name": "現金分享計劃", "status": "ELIGIBLE"}},
-                None,
-            )
         if call.name == "one_account.search_elderly_activities":
             return ToolExecutionResult(
                 call.name,
@@ -67,19 +58,11 @@ class ControllerTests(unittest.TestCase):
             intent_recognizer=KeywordIntentRecognizer(),
         )
 
-    def test_cash_sharing_message_calls_one_account_tool(self):
-        response = self.controller.handle_message(
-            InteractionRequest("S-CASH", "我想查現金分享計劃")
-        )
-        self.assertEqual(response["task_state"], "completed")
-        self.assertEqual(
-            [call.name for call in self.pipeline.calls],
-            ["one_account.get_cash_sharing_plan"],
-        )
-        self.assertEqual(
-            self.pipeline.calls[0].arguments["context"]["mock_user_id"],
-            "USR-DEMO-001",
-        )
+    def test_legacy_message_route_rejects_cash_intents_before_tool_calls(self):
+        with self.assertRaises(LegacyInteractionContractError) as raised:
+            self.controller.handle_message(InteractionRequest("S-LEGACY-CASH", "我想查現金分享計劃"))
+        self.assertEqual(raised.exception.code, "INTERACTION_EVENT_REQUIRED")
+        self.assertEqual(self.pipeline.calls, [])
 
     def test_activity_message_calls_activity_search_tool(self):
         response = self.controller.handle_message(
