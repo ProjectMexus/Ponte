@@ -1,0 +1,191 @@
+2026-08-06 16:42:44,349 INFO [backend] request_start method=GET path=/mock/medical/v1/departments request_id=HTTP-BE-67E77535787F
+2026-08-06 16:42:44,359 INFO [backend] request_end method=GET path=/mock/medical/v1/departments request_id=HTTP-BE-67E77535787F status=200 latency_ms=16 bytes=482
+2026-08-06 16:42:44,596 INFO [mcp] send request_id=MCP-1 operation=initialize input_keys=capabilities,clientInfo,protocolVersion
+2026-08-06 16:42:44,596 DEBUG [mcp] send_debug
+2026-08-06 16:42:44,596 DEBUG [mcp]   request_id="MCP-1"
+2026-08-06 16:42:44,596 DEBUG [mcp]   operation="initialize"
+2026-08-06 16:42:44,596 DEBUG [mcp]   request={
+2026-08-06 16:42:44,596 DEBUG [mcp]     "id": 1,
+2026-08-06 16:42:44,596 DEBUG [mcp]     "jsonrpc": "2.0",
+2026-08-06 16:42:44,596 DEBUG [mcp]     "method": "initialize",
+2026-08-06 16:42:44,596 DEBUG [mcp]     "params": {
+2026-08-06 16:42:44,596 DEBUG [mcp]       "capabilities": {},
+2026-08-06 16:42:44,596 DEBUG [mcp]       "clientInfo": {
+2026-08-06 16:42:44,596 DEBUG [mcp]         "name": "ponte-middleware",
+2026-08-06 16:42:44,596 DEBUG [mcp]         "version": "0.1.0"
+2026-08-06 16:42:44,596 DEBUG [mcp]       },
+2026-08-06 16:42:44,596 DEBUG [mcp]       "protocolVersion": "2025-03-26"
+2026-08-06 16:42:44,596 DEBUG [mcp]     }
+2026-08-06 16:42:44,596 DEBUG [mcp]   }
+2026-08-06 16:42:44,841 DEBUG [mcp] receive_debug
+2026-08-06 16:42:44,841 DEBUG [mcp]   request_id="MCP-1"
+2026-08-06 16:42:44,841 DEBUG [mcp]   operation="initialize"
+2026-08-06 16:42:44,841 DEBUG [mcp]   response={
+2026-08-06 16:42:44,841 DEBUG [mcp]     "id": 1,
+2026-08-06 16:42:44,841 DEBUG [mcp]     "jsonrpc": "2.0",
+2026-08-06 16:42:44,841 DEBUG [mcp]     "result": {
+2026-08-06 16:42:44,841 DEBUG [mcp]       "capabilities": {
+2026-08-06 16:42:44,841 DEBUG [mcp]         "tools": {
+2026-08-06 16:42:44,841 DEBUG [mcp]           "listChanged": false
+2026-08-06 16:42:44,841 DEBUG [mcp]         }
+2026-08-06 16:42:44,841 DEBUG [mcp]       },
+2026-08-06 16:42:44,841 DEBUG [mcp]       "protocolVersion": "2025-03-26",
+2026-08-06 16:42:44,841 DEBUG [mcp]       "serverInfo": {
+2026-08-06 16:42:44,841 DEBUG [mcp]         "name": "ponte-mcp-adapter",
+2026-08-06 16:42:44,841 DEBUG [mcp]         "version": "0.1.0"
+2026-08-06 16:42:44,841 DEBUG [mcp]       }
+2026-08-06 16:42:44,841 DEBUG [mcp]     }
+2026-08-06 16:42:44,841 DEBUG [mcp]   }
+2026-08-06 16:42:44,842 INFO [mcp] receive request_id=MCP-1 operation=initialize outcome=success latency_ms=250
+2026-08-06 16:42:44,964 INFO [middleware] request_start method=GET path=/api/health request_id=HTTP-MW-ED0361A68CFB
+2026-08-06 16:42:44,966 INFO [mcp] send request_id=2 operation=tools/call tool=medical.list_departments input_keys=context,input
+2026-08-06 16:42:44,966 DEBUG [mcp] send_debug
+2026-08-06 16:42:44,966 DEBUG [mcp]   request_id=2
+2026-08-06 16:42:44,966 DEBUG [mcp]   operation="tools/call"
+2026-08-06 16:42:44,966 DEBUG [mcp]   tool="medical.list_departments"
+2026-08-06 16:42:44,966 DEBUG [mcp]   request={
+2026-08-06 16:42:44,966 DEBUG [mcp]     "id": 2,
+2026-08-06 16:42:44,966 DEBUG [mcp]     "jsonrpc": "2.0",
+2026-08-06 16:42:44,966 DEBUG [mcp]     "method": "tools/call",
+2026-08-06 16:42:44,966 DEBUG [mcp]     "params": {
+2026-08-06 16:42:44,966 DEBUG [mcp]       "arguments": {
+2026-08-06 16:42:44,966 DEBUG [mcp]         "context": {
+2026-08-06 16:42:44,966 DEBUG [mcp]           "accept_language": "zh-TW",
+2026-08-06 16:42:44,966 DEBUG [mcp]           "authorization": "<redacted>",
+2026-08-06 16:42:44,966 DEBUG [mcp]           "mock_user_id": "USR-DEMO-001",
+2026-08-06 16:42:44,966 DEBUG [mcp]           "request_id": "REQ-MW-EE3E26CA947D"
+2026-08-06 16:42:44,966 DEBUG [mcp]         },
+2026-08-06 16:42:44,966 DEBUG [mcp]         "input": {}
+2026-08-06 16:42:44,966 DEBUG [mcp]       },
+2026-08-06 16:42:44,966 DEBUG [mcp]       "name": "medical.list_departments"
+2026-08-06 16:42:44,966 DEBUG [mcp]     }
+2026-08-06 16:42:44,966 DEBUG [mcp]   }
+2026-08-06 16:42:44,994 INFO [backend] request_start method=GET path=/mock/medical/v1/departments request_id=HTTP-BE-95356C639069
+2026-08-06 16:42:44,996 INFO [backend] request_end method=GET path=/mock/medical/v1/departments request_id=HTTP-BE-95356C639069 status=200 latency_ms=0 bytes=482
+2026-08-06 16:42:44,999 DEBUG [mcp] receive_debug
+2026-08-06 16:42:44,999 DEBUG [mcp]   request_id=2
+2026-08-06 16:42:44,999 DEBUG [mcp]   operation="tools/call"
+2026-08-06 16:42:44,999 DEBUG [mcp]   tool="medical.list_departments"
+2026-08-06 16:42:44,999 DEBUG [mcp]   response={
+2026-08-06 16:42:44,999 DEBUG [mcp]     "id": 2,
+2026-08-06 16:42:44,999 DEBUG [mcp]     "jsonrpc": "2.0",
+2026-08-06 16:42:44,999 DEBUG [mcp]     "result": {
+2026-08-06 16:42:44,999 DEBUG [mcp]       "content": [
+2026-08-06 16:42:44,999 DEBUG [mcp]         {
+2026-08-06 16:42:44,999 DEBUG [mcp]           "text": "{\"request_id\": \"REQ-5EC87A24B0FB\", \"data\": [{\"resourceType\": \"Organization\", \"id\": \"DEPT-CARDIO\", \"name\": \"心臟科\", \"name_en\": \"Cardiology\", \"location_id\": \"LOC-MAIN-OPD\", \"active\": true}, {\"resourceType\": \"Organization\", \"id\": \"DEPT-IMAGING\", \"name\": \"影像科\", \"name_en\": \"Imaging\", \"location_id\": \"LOC-IMAGING-CENTER\", \"active\": true}, {\"resourceType\": \"Organization\", \"id\": \"DEPT-REHAB\", \"name\": \"復康治療科\", \"name_en\": \"Rehabilitation\", \"location_id\": \"LOC-REHAB-01\", \"active\": true}], \"meta\": {\"total\": 3}}",
+2026-08-06 16:42:44,999 DEBUG [mcp]           "type": "text"
+2026-08-06 16:42:44,999 DEBUG [mcp]         }
+2026-08-06 16:42:44,999 DEBUG [mcp]       ],
+2026-08-06 16:42:44,999 DEBUG [mcp]       "structuredContent": {
+2026-08-06 16:42:44,999 DEBUG [mcp]         "data": [
+2026-08-06 16:42:44,999 DEBUG [mcp]           {
+2026-08-06 16:42:44,999 DEBUG [mcp]             "active": true,
+2026-08-06 16:42:44,999 DEBUG [mcp]             "id": "DEPT-CARDIO",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "location_id": "LOC-MAIN-OPD",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "name": "心臟科",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "name_en": "Cardiology",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "resourceType": "Organization"
+2026-08-06 16:42:44,999 DEBUG [mcp]           },
+2026-08-06 16:42:44,999 DEBUG [mcp]           {
+2026-08-06 16:42:44,999 DEBUG [mcp]             "active": true,
+2026-08-06 16:42:44,999 DEBUG [mcp]             "id": "DEPT-IMAGING",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "location_id": "LOC-IMAGING-CENTER",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "name": "影像科",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "name_en": "Imaging",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "resourceType": "Organization"
+2026-08-06 16:42:44,999 DEBUG [mcp]           },
+2026-08-06 16:42:44,999 DEBUG [mcp]           {
+2026-08-06 16:42:44,999 DEBUG [mcp]             "active": true,
+2026-08-06 16:42:44,999 DEBUG [mcp]             "id": "DEPT-REHAB",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "location_id": "LOC-REHAB-01",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "name": "復康治療科",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "name_en": "Rehabilitation",
+2026-08-06 16:42:44,999 DEBUG [mcp]             "resourceType": "Organization"
+2026-08-06 16:42:44,999 DEBUG [mcp]           }
+2026-08-06 16:42:44,999 DEBUG [mcp]         ],
+2026-08-06 16:42:44,999 DEBUG [mcp]         "meta": {
+2026-08-06 16:42:44,999 DEBUG [mcp]           "total": 3
+2026-08-06 16:42:44,999 DEBUG [mcp]         },
+2026-08-06 16:42:44,999 DEBUG [mcp]         "request_id": "REQ-5EC87A24B0FB"
+2026-08-06 16:42:44,999 DEBUG [mcp]       }
+2026-08-06 16:42:44,999 DEBUG [mcp]     }
+2026-08-06 16:42:44,999 DEBUG [mcp]   }
+2026-08-06 16:42:45,001 INFO [mcp] receive request_id=2 operation=tools/call tool=medical.list_departments outcome=success latency_ms=47
+2026-08-06 16:42:45,001 INFO [middleware] request_end method=GET path=/api/health request_id=HTTP-MW-ED0361A68CFB status=200 latency_ms=47
+2026-08-06 16:42:45,711 INFO [frontend] request_end method=GET path=/ status=200 bytes=4000 latency_ms=109
+2026-08-06 16:42:51,593 INFO [middleware] request_start method=GET path=/api/health request_id=HTTP-MW-69A52ABA53F4
+2026-08-06 16:42:51,604 INFO [mcp] send request_id=3 operation=tools/call tool=medical.list_departments input_keys=context,input
+2026-08-06 16:42:51,604 DEBUG [mcp] send_debug
+2026-08-06 16:42:51,604 DEBUG [mcp]   request_id=3
+2026-08-06 16:42:51,604 DEBUG [mcp]   operation="tools/call"
+2026-08-06 16:42:51,604 DEBUG [mcp]   tool="medical.list_departments"
+2026-08-06 16:42:51,604 DEBUG [mcp]   request={
+2026-08-06 16:42:51,604 DEBUG [mcp]     "id": 3,
+2026-08-06 16:42:51,604 DEBUG [mcp]     "jsonrpc": "2.0",
+2026-08-06 16:42:51,604 DEBUG [mcp]     "method": "tools/call",
+2026-08-06 16:42:51,604 DEBUG [mcp]     "params": {
+2026-08-06 16:42:51,604 DEBUG [mcp]       "arguments": {
+2026-08-06 16:42:51,604 DEBUG [mcp]         "context": {
+2026-08-06 16:42:51,604 DEBUG [mcp]           "accept_language": "zh-TW",
+2026-08-06 16:42:51,604 DEBUG [mcp]           "authorization": "<redacted>",
+2026-08-06 16:42:51,604 DEBUG [mcp]           "mock_user_id": "USR-DEMO-001",
+2026-08-06 16:42:51,604 DEBUG [mcp]           "request_id": "REQ-MW-048DD9F10AA0"
+2026-08-06 16:42:51,604 DEBUG [mcp]         },
+2026-08-06 16:42:51,604 DEBUG [mcp]         "input": {}
+2026-08-06 16:42:51,604 DEBUG [mcp]       },
+2026-08-06 16:42:51,604 DEBUG [mcp]       "name": "medical.list_departments"
+2026-08-06 16:42:51,604 DEBUG [mcp]     }
+2026-08-06 16:42:51,604 DEBUG [mcp]   }
+2026-08-06 16:42:51,625 INFO [backend] request_start method=GET path=/mock/medical/v1/departments request_id=HTTP-BE-8C30E8F820E2
+2026-08-06 16:42:51,625 INFO [backend] request_end method=GET path=/mock/medical/v1/departments request_id=HTTP-BE-8C30E8F820E2 status=200 latency_ms=0 bytes=482
+2026-08-06 16:42:51,626 DEBUG [mcp] receive_debug
+2026-08-06 16:42:51,626 DEBUG [mcp]   request_id=3
+2026-08-06 16:42:51,626 DEBUG [mcp]   operation="tools/call"
+2026-08-06 16:42:51,626 DEBUG [mcp]   tool="medical.list_departments"
+2026-08-06 16:42:51,626 DEBUG [mcp]   response={
+2026-08-06 16:42:51,626 DEBUG [mcp]     "id": 3,
+2026-08-06 16:42:51,626 DEBUG [mcp]     "jsonrpc": "2.0",
+2026-08-06 16:42:51,626 DEBUG [mcp]     "result": {
+2026-08-06 16:42:51,626 DEBUG [mcp]       "content": [
+2026-08-06 16:42:51,626 DEBUG [mcp]         {
+2026-08-06 16:42:51,626 DEBUG [mcp]           "text": "{\"request_id\": \"REQ-179DF530E23E\", \"data\": [{\"resourceType\": \"Organization\", \"id\": \"DEPT-CARDIO\", \"name\": \"心臟科\", \"name_en\": \"Cardiology\", \"location_id\": \"LOC-MAIN-OPD\", \"active\": true}, {\"resourceType\": \"Organization\", \"id\": \"DEPT-IMAGING\", \"name\": \"影像科\", \"name_en\": \"Imaging\", \"location_id\": \"LOC-IMAGING-CENTER\", \"active\": true}, {\"resourceType\": \"Organization\", \"id\": \"DEPT-REHAB\", \"name\": \"復康治療科\", \"name_en\": \"Rehabilitation\", \"location_id\": \"LOC-REHAB-01\", \"active\": true}], \"meta\": {\"total\": 3}}",
+2026-08-06 16:42:51,626 DEBUG [mcp]           "type": "text"
+2026-08-06 16:42:51,626 DEBUG [mcp]         }
+2026-08-06 16:42:51,626 DEBUG [mcp]       ],
+2026-08-06 16:42:51,626 DEBUG [mcp]       "structuredContent": {
+2026-08-06 16:42:51,626 DEBUG [mcp]         "data": [
+2026-08-06 16:42:51,626 DEBUG [mcp]           {
+2026-08-06 16:42:51,626 DEBUG [mcp]             "active": true,
+2026-08-06 16:42:51,626 DEBUG [mcp]             "id": "DEPT-CARDIO",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "location_id": "LOC-MAIN-OPD",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "name": "心臟科",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "name_en": "Cardiology",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "resourceType": "Organization"
+2026-08-06 16:42:51,626 DEBUG [mcp]           },
+2026-08-06 16:42:51,626 DEBUG [mcp]           {
+2026-08-06 16:42:51,626 DEBUG [mcp]             "active": true,
+2026-08-06 16:42:51,626 DEBUG [mcp]             "id": "DEPT-IMAGING",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "location_id": "LOC-IMAGING-CENTER",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "name": "影像科",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "name_en": "Imaging",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "resourceType": "Organization"
+2026-08-06 16:42:51,626 DEBUG [mcp]           },
+2026-08-06 16:42:51,626 DEBUG [mcp]           {
+2026-08-06 16:42:51,626 DEBUG [mcp]             "active": true,
+2026-08-06 16:42:51,626 DEBUG [mcp]             "id": "DEPT-REHAB",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "location_id": "LOC-REHAB-01",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "name": "復康治療科",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "name_en": "Rehabilitation",
+2026-08-06 16:42:51,626 DEBUG [mcp]             "resourceType": "Organization"
+2026-08-06 16:42:51,626 DEBUG [mcp]           }
+2026-08-06 16:42:51,626 DEBUG [mcp]         ],
+2026-08-06 16:42:51,626 DEBUG [mcp]         "meta": {
+2026-08-06 16:42:51,626 DEBUG [mcp]           "total": 3
+2026-08-06 16:42:51,626 DEBUG [mcp]         },
+2026-08-06 16:42:51,626 DEBUG [mcp]         "request_id": "REQ-179DF530E23E"
+2026-08-06 16:42:51,626 DEBUG [mcp]       }
+2026-08-06 16:42:51,626 DEBUG [mcp]     }
+2026-08-06 16:42:51,626 DEBUG [mcp]   }
+2026-08-06 16:42:51,627 INFO [mcp] receive request_id=3 operation=tools/call tool=medical.list_departments outcome=success latency_ms=31
+2026-08-06 16:42:51,627 INFO [middleware] request_end method=GET path=/api/health request_id=HTTP-MW-69A52ABA53F4 status=200 latency_ms=31
+2026-08-06 16:42:51,658 INFO [frontend] request_end method=GET path=/ status=200 bytes=4000 latency_ms=0

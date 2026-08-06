@@ -1,167 +1,108 @@
-# Ponte 公共服務平台 Demo
+<div align="center">
+  <img src="ponte2.jpg" alt="Ponte 語音服務助理小澳" width="180" />
 
-Ponte 是一個面向長者的公共服務入口與任務執行 Demo。使用者可以用文字或瀏覽器語音表達需要，Ponte 再透過受控的 interaction flow、MCP tools 和 mock domain services 完成服務查詢及後續操作展示。
+  <h1>Ponte</h1>
+  <p><strong>讓長者以自然語言，安心辦理公共服務。</strong></p>
+  <p><a href="https://ponte-8k6h.onrender.com/">線上體驗</a> · <a href="docs/PonteArch.md">系統架構</a> · <a href="docs/render-deployment.md">部署說明</a></p>
+</div>
 
-這個 repository 是本地可執行的 Demo，不連接真實政府、醫療或社福系統，也不代表正式 API；所有身份、醫療、活動、籌號、回執及持久化資料都是 mock。
+Ponte 是一個以粵語／繁體中文為優先的公共服務 Demo。使用者只需說出或輸入需求，系統便會以**受控流程**協調醫療、一戶通和社會福利的模擬服務，清楚展示正在處理的事項、下一步選擇，以及需要確認的操作。
 
-## 目前 Demo 範圍
+> **立即使用：** [https://ponte-8k6h.onrender.com/](https://ponte-8k6h.onrender.com/)
 
-- 前端提供適合長者閱讀的對話介面、文字輸入、瀏覽器語音輸入及流程狀態展示。
-- Middleware 是前端唯一需要呼叫的 HTTP bridge，負責 interaction controller、session state 和 MCP process 管理。
-- MCP 轉接層以 stdio JSON-RPC 暴露固定的 21 個工具，將受控 tool call 轉為 mock backend HTTP request。
-- Mock backends 目前包含一戶通、醫療、社會福利及長者文娛活動 domain。
-- 目前前端自然語言端到端流程支援「我想查詢自己的醫療預約」的唯讀預約查詢，以及「我想預約醫療服務」的預約流程；預約時會查詢服務、日期範圍和可預約時段，確認後寫入 mock backend，之後可再查詢讀回記錄。其他 domain 可透過 MCP／API contract 和診斷接口測試。
+## 為何是 Ponte？
 
-## 架構
+公共服務不應要求長者先知道該用哪個平台、填哪份表格或記住哪個部門。Ponte 把複雜的服務入口轉化為一段可理解、可追蹤、可隨時確認或停止的對話式流程。
+
+| 使用者看見的體驗 | 系統如何保障流程 |
+| --- | --- |
+| 以文字或瀏覽器語音說出需要 | 前端提供大字、高對比和語音回讀；語音內容會先顯示，送出後才開始處理。 |
+| 清楚看見每項服務的進度 | 每個需求都有獨立任務卡，保留步驟、結果和可執行的下一步。 |
+| 在提交前掌握自己將要做的事 | 會造成變更的操作必須經使用者明確確認。 |
+| 不必面對原始 API 或工具名稱 | Middleware 以固定的 MCP 工具和預先定義的 workflow 處理整個流程。 |
+
+## 可體驗的服務
+
+- **醫療預約查詢**：讀取模擬的覆診資料，顯示服務、日期、時間、地點和狀態。
+- **醫療服務預約**：選擇服務與日期範圍，查看可選時段，確認後建立模擬預約。
+- **現金分享計劃**：查詢模擬的一戶通計劃摘要。
+- **長者文娛活動**：搜尋可參加的長者活動。
+
+線上版可直接嘗試以下句子：
 
 ```text
-瀏覽器
-  │ 文字／語音
-  ▼
-frontend/                 靜態 UI
-  ▼ HTTP
-middleware/              Interaction Controller + session + execution pipeline
-  ▼ stdio JSON-RPC
-MCP/                     固定 tool registry + REST adapter
-  ▼ HTTP
-mock_backends/           One Account / Medical / Social Welfare
+我想查詢自己的醫療預約
+我想預約醫療服務
+我想查現金分享計劃
+我想找長者文娛活動
 ```
 
-各層的責任是分開的：Frontend Task Workspace 管理目前頁面的任務卡歷史；Intent LLM／intent recognizer 只把使用者輸入轉成結構化 intent；Task Recovery LLM 只理解 sanitised 的 backend/tool 結果並產生 `RecoveryPlan`，兩者由不同 interface、prompt、context 和設定管理；流程、確認及 tool permission 由 middleware／workflow layer 控制；MCP 只負責受控的工具接入；mock backend 只模擬下游服務。
+## 架構一覽
 
-## 快速開始
+```text
+瀏覽器（文字／語音、任務工作區）
+                │ HTTP
+                ▼
+Frontend ──► Middleware（意圖辨識、流程、確認、任務狀態）
+                │ stdio JSON-RPC
+                ▼
+        MCP（固定工具註冊表與 REST adapter）
+                │ HTTP
+                ▼
+Mock Backends（醫療／一戶通／社會福利）
+```
 
-需要 Python 3.13 或以上，不需要安裝第三方 Python 或 frontend runtime dependency。
+這個分層讓 LLM 專注於理解需求和解釋結果，卻不能自行跳過確認、變更任務狀態或直接存取下游服務。實際執行只會經過受控的 workflow 和固定工具註冊表。
 
-第一次使用可建立本地設定檔：
+## 本機快速開始
+
+### 需求
+
+- Python 3.13 或以上
+- 現代瀏覽器；如要使用語音，請允許麥克風權限
+- 不需安裝額外的 Python 或前端套件
+
+在專案根目錄建立本機設定檔：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS／Linux 可使用：
 
 ```bash
 cp .env.example .env
 ```
 
-要使用 Gemini 做 Intent LLM recognition，請在本地 `.env` 填入 Google AI Studio API key。`.env.example` 已示範 Ponte 所需的 OpenAI-compatible endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` 及低成本模型 `gemini-2.5-flash-lite`；API key 只放在本地設定，不要提交到 repository。若 `PONTE_LLM_API_URL` 留空，middleware 會只使用 keyword intent recognition。
-
-Task Recovery LLM 是另一個獨立邊界，必須另外設定 `PONTE_TASK_RECOVERY_LLM_API_URL`、`PONTE_TASK_RECOVERY_LLM_API_KEY` 和 `PONTE_TASK_RECOVERY_LLM_MODEL`；它使用獨立的 prompt、sanitized backend/tool context 和 `RecoveryPlan` parser，不共用 Intent LLM 的輸入或執行入口。設定 recovery endpoint 後，backend/tool failure 會在 log 看到 `[llm]` 的 `operation=task_recovery`；若 URL 留空或 provider 呼叫失敗，middleware 會記錄 deterministic fallback 並使用內建 recovery policy。
-
-在 repository 根目錄執行完整 stack：
+接著啟動完整 Demo：
 
 ```bash
 python scripts/run_stack.py
 ```
 
-Runner 會啟動 mock backend、middleware、middleware 管理的 MCP stdio server 及 frontend，並預設把 mock state 寫入 repository root 下、與 `mock_backends/` 同級的 `database/`。看到 `Ponte stack is ready.` 後，開啟它列出的 Frontend URL，輸入以下唯讀查詢：
+當終端機顯示 `Ponte stack is ready.` 後，開啟輸出的 Frontend URL（預設為 `http://127.0.0.1:5173/`）。按 `Ctrl-C` 可停止整個 stack。
 
-```text
-我想查詢自己的醫療預約
-```
-
-成功時畫面會顯示 middleware 已連線、完成的查詢任務卡，以及每筆預約的服務、日期／時間、地點和狀態；這個查詢不會載入服務、不會搜尋時段，也不會建立預約。
-
-要測試醫療預約流程，輸入：
-
-```text
-我想預約醫療服務
-```
-
-前端會建立一張進行中的預約任務卡，先取得可預約服務；選擇服務及日期範圍後，middleware 會返回可預約時段。如果 backend 暫時失敗、缺少資料或目前沒有名額，任務卡會保留並說明原因，提供重試或替代方案；選擇方案會繼續同一 task。選擇時段並明確確認後，mock backend 才會建立預約記錄，完成的任務卡會收合但仍可重新展開。完成後再次輸入「我想查詢自己的醫療預約」，即可建立新的查詢任務並從 mock backend 讀回剛建立的預約。按 `Ctrl-C` 會關閉整個 stack。
-
-也可以在前端輸入以下兩個只讀需求，直接測試 middleware → MCP → mock backend 的完整路徑：
-
-```text
-我想查現金分享計劃
-我想找長者文娛活動
-```
-
-前者會呼叫 `one_account.get_cash_sharing_plan`，後者會呼叫
-`one_account.search_elderly_activities`；每個需求會以獨立任務卡顯示在服務工作區。
-
-若要逐一測試固定 registry 的 MCP tools，可在同一個文字框輸入：
-
-```text
-mcp medical.list_departments {}
-mcp one_account.get_cash_sharing_plan {"year":2026}
-mcp one_account.search_elderly_activities {"available_only":true}
-```
-
-這些命令仍然只經由 middleware；middleware 會重新驗證 tool 和 input，再讓真實 MCP stdio server 呼叫 mock backend。GET tool 會立即執行，POST tool 必須按確認後才會發送。
-
-需要使用其他資料根目錄時，可指定 `--data-dir` 覆寫預設的 `database/`：
+### 使用 Docker Compose（可選）
 
 ```bash
-python scripts/run_stack.py --data-dir /tmp/ponte-mock-data
+docker compose up --build
 ```
 
-建立操作會以 JSON Lines 格式寫入 `database/**/*.txt`；medical 預約位於 `database/medical/appointments.txt`，Task 位於 `database/medical/tasks.txt`，而 `database/id_sequences.txt` 保存可重啟的 mock ID sequence。`database/` 只保存本機 mock state，`.txt` 內容不會提交到 repository。
+然後開啟 [http://localhost:5173](http://localhost:5173)。
 
-### Terminal logging
+## 設定 LLM（可選）
 
-`run_stack.py` 會在啟動 backend、middleware/MCP 和 frontend 前載入本地 `.env`；shell 中已存在的同名變數優先。可用 `PONTE_LOG_LEVEL` 控制 terminal logging，預設使用 `INFO`：
+未設定 LLM 時，Ponte 仍會以內建的 keyword intent recognition 執行 Demo。若要使用 OpenAI 相容的 chat-completions endpoint，請在本機 `.env` 設定：
 
-```bash
-PONTE_LOG_LEVEL=INFO python scripts/run_stack.py
+```dotenv
+PONTE_LLM_API_URL=https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+PONTE_LLM_API_KEY=your-api-key
+PONTE_LLM_MODEL=gemini-2.5-flash-lite
 ```
 
-INFO 只輸出安全摘要，例如 method/path/status、model/endpoint metadata、message character counts、normalized intent、tool name/input keys、outcome 和 latency。需要在本機除錯內容流時可使用 DEBUG：
+Task Recovery LLM 使用另一組 `PONTE_TASK_RECOVERY_LLM_*` 設定，只接收已清理的 backend／工具結果來產生復原建議。兩組設定都不應提交到 repository。完整環境變數和行為請參考 [Middleware README](middleware/README.md)。
 
-Bash:
-
-```bash
-PONTE_LOG_LEVEL=DEBUG python scripts/run_stack.py
-```
-
-PowerShell
-```pwsh
-$env:PONTE_LOG_LEVEL="DEBUG"; python scripts/run_stack.py
-```
-
-DEBUG 會在 `[frontend]`、`[middleware]`、`[llm]`、`[mcp]` 和 `[backend]` component logs 之外，顯示完整 LLM prompt/response 及 MCP request/response，包括醫療資料（medical data）。對 LLM provider 而言，DEBUG 會記錄 provider success response bodies 和 provider error response bodies：只要取得 response，就會保留成功回應、解析失敗回應或 HTTP error body；若沒有 response 可取得，則記錄 `response_unavailable=true` 和固定的 error type。JSON 內容會以 indented multi-line 格式輸出，每行都保留完整的 timestamp/level/component prefix，方便按行閱讀與搜尋。frontend、middleware HTTP server 和 mock backend 仍不記錄 HTTP body；API key、Authorization、Cookie、Bearer token 及其他 credentials 在任何 level 都會遮罩。DEBUG 可能包含醫療資料，只應在受控的本機 terminal 使用；完成除錯後改回 `PONTE_LOG_LEVEL=INFO`。
-
-若已將 terminal output 保存為 `ponte-terminal.log`，可用以下篩選所有 component：
-
-```bash
-rg '\[(frontend|middleware|llm|mcp|backend)\]' ponte-terminal.log
-```
-
-## 分開啟動各服務
-
-需要逐層除錯時，可在不同 terminal 依次執行：
-
-```bash
-python -m mock_backends.server \
-  --host 127.0.0.1 --port 8080 --data-dir /tmp/ponte-mock-data
-
-python -m middleware.server \
-  --host 127.0.0.1 --port 8090
-
-python -m frontend.server \
-  --host 127.0.0.1 --port 5173
-```
-
-然後開啟 [http://127.0.0.1:5173](http://127.0.0.1:5173)。前端預設呼叫 `http://127.0.0.1:8090` 的 middleware；若使用其他 port，可以使用 query override，例如：
-
-```text
-http://127.0.0.1:5173/?middleware=http://127.0.0.1:18090
-```
-
-## 主要服務與接口
-
-| 服務 | 啟動入口 | 預設位置 | 說明 |
-| --- | --- | --- | --- |
-| Frontend | `python -m frontend.server` | `127.0.0.1:5173` | 對話、語音及服務工作區 |
-| Middleware | `python -m middleware.server` | `127.0.0.1:8090` | `/api/health`、`/api/interactions/*`、受控 MCP 呼叫 |
-| Mock Backend | `python -m mock_backends.server` | `127.0.0.1:8080` | One Account、Medical、Social Welfare HTTP mock |
-| MCP Server | `python -m MCP` | stdio | 固定 tool registry；通常由 middleware 管理 |
-
-Mock backend 的主要路徑包括：
-
-- `/mock/one-account`
-- `/mock/medical/v1`
-- `/mock/elderly-activities/v1`
-- `/mock/social-welfare`
-
-## 測試
-
-執行項目、MCP 及 middleware 測試：
+## 驗證
 
 ```bash
 python -m unittest discover -s tests -v
@@ -170,35 +111,36 @@ python -m unittest discover -s middleware/tests -v
 python -m compileall -q MCP middleware mock_backends frontend scripts tests
 ```
 
-測試只使用 localhost、temporary directories 及 mock data，不需要外部服務。HTTP smoke／integration tests 需要環境允許綁定 `127.0.0.1` 的 ephemeral socket。
+前端靜態檢查：
 
-## Repository 結構
-
-```text
-Ponte/
-├── frontend/             前端 UI、語音能力及 middleware client
-├── middleware/           Interaction Controller、session、execution pipeline
-├── MCP/                  MCP stdio server、tool registry、REST adapter
-├── mock_backends/        一戶通、醫療、社福 mock domain services
-├── database/              預設的 JSON Lines .txt mock state
-├── scripts/run_stack.py  一次啟動完整本地 Demo
-├── tests/                跨模組及 full-stack 測試
-└── docs/                 架構、產品、API、spec 及 implementation plans
+```bash
+python -m unittest tests.test_frontend_static -v
+node --check frontend/app.js
+node --check frontend/interaction-view.js
 ```
 
-## 文件索引
+## 專案導覽
 
-- [Ponte 系統架構](docs/PonteArch.md)
-- [Ponte 產品定位與公共服務平台說明](docs/Ponte公共服務平台.md)
-- [Frontend README](frontend/README.md)
-- [Middleware README](middleware/README.md)
-- [MCP／工具轉接層 README](MCP/README.md)
-- [Mock Backends README](mock_backends/README.md)
-- [一戶通 Mock API](docs/api/one-account-api.md)
-- [鏡湖通醫療 Mock API](docs/api/jinghu-medical-mock-api.md)
-- [長者文娛活動 API](docs/api/elderly-cultural-activities-api.md)
-- [Social Welfare contract README](mock_backends/social_welfare/README.md)
+| 目錄／檔案 | 用途 |
+| --- | --- |
+| [`frontend/`](frontend/) | 無 build dependency 的語音優先網頁介面與 middleware client。 |
+| [`middleware/`](middleware/) | 互動控制器、workflow、確認機制、session 和 MCP process 管理。 |
+| [`MCP/`](MCP/) | 固定的工具註冊表、stdio JSON-RPC server 和 REST adapter。 |
+| [`mock_backends/`](mock_backends/) | 醫療、一戶通及社會福利的模擬服務。 |
+| [`database/`](database/) | 本機 Demo 的 JSON Lines mock state；內容不應提交。 |
+| [`scripts/run_stack.py`](scripts/run_stack.py) | 一次啟動 backend、middleware、MCP 和 frontend 的本機 runner。 |
+| [`render.yaml`](render.yaml) | Render 單容器部署 Blueprint。 |
 
-## 邊界與安全提醒
+更多細節：
 
-Ponte Demo 不執行真實身份驗證、醫療判斷、付款、電話撥出或政府服務提交。需要確認的操作必須由上層流程提供 `confirmation`／`consent`；adapter 不會自行跳過確認，也不應把這套 mock contract 當成正式服務 API。
+- [系統架構與設計原則](docs/PonteArch.md)
+- [Ponte 產品定位](docs/Ponte公共服務平台.md)
+- [語音 Agent 說明](docs/VOICE_AGENT.md)
+- [Render 部署指南](docs/render-deployment.md)
+- [Frontend](frontend/README.md) · [Middleware](middleware/README.md) · [MCP](MCP/README.md) · [Mock Backends](mock_backends/README.md)
+
+## Demo 範圍與安全說明
+
+Ponte 是展示用途的本機／雲端 Demo，不會連接真實政府、醫療或社福系統，亦不執行真實身分驗證、診斷、付款、轉介或服務提交。帳戶、預約、活動、回執及所有持久化資料皆為 mock data；請勿輸入真實個人或醫療資料。
+
+即使在 Demo 中，涉及變更的流程仍需明確確認。這個設計用以說明 Ponte 的核心原則：**AI 可以協助操作，但使用者必須看得見、聽得懂，並始終保有確認、修正和停止的權利。**
