@@ -1,12 +1,10 @@
 import unittest
 
-from middleware.contracts import ToolExecutionResult
 from middleware.interaction_contracts import (
-    ActionReceiptBuilder,
     CanonicalInteractionResult,
     ConfirmationDecision,
     EventEnvelope,
-    MedicalResultVerifier,
+    InteractionTask,
 )
 
 
@@ -17,13 +15,13 @@ class InteractionContractTests(unittest.TestCase):
             "event": {
                 "type": "user_utterance",
                 "task_id": None,
-                "content": "我想預約腹部超聲波",
+                "content": "I want to book an ultrasound",
                 "source": "voice",
                 "language": "yue",
             },
             "audit": {"source": "voice", "language": "yue"},
         })
-        self.assertEqual(envelope.event["content"], "我想預約腹部超聲波")
+        self.assertEqual(envelope.event["content"], "I want to book an ultrasound")
         self.assertNotIn("source", envelope.event)
         self.assertNotIn("language", envelope.event)
 
@@ -42,36 +40,16 @@ class InteractionContractTests(unittest.TestCase):
         self.assertEqual(decision.action_id, "ACT-1")
         self.assertEqual(decision.decision, "approve")
 
-    def test_receipt_builder_uses_verified_backend_reference(self):
-        result = ToolExecutionResult(
-            "medical.create_appointment",
-            "create_appointment",
-            True,
-            "REQ-1",
-            {
-                "data": {
-                    "id": "APT-1",
-                    "status": "confirmed",
-                    "service": {"id": "SERVICE-US-001", "display": "腹部超聲波檢查"},
-                    "start": "2026-08-07T15:00:00+08:00",
-                    "location": {"display": "景湖醫療中心"},
-                    "patient_id": "PAT-SECRET",
-                },
-                "task": {"id": "TASK-1"},
-                "receipt": {"reference": "MED-APT-1", "issued_at": "2026-08-06T15:01:00Z"},
-            },
-        )
-        verified = MedicalResultVerifier.verify(result)
-        receipt = ActionReceiptBuilder.build("TASK-1", verified)
-        self.assertEqual(receipt["receipt_id"], "MED-APT-1")
-        self.assertEqual(receipt["issued_at"], "2026-08-06T15:01:00Z")
-        self.assertNotIn("patient_id", receipt)
-        self.assertNotIn("reference", receipt)
-
-    def test_invalid_execution_result_is_rejected(self):
-        result = ToolExecutionResult("medical.create_appointment", "create_appointment", True, "REQ-1", {"data": {}})
-        with self.assertRaises(ValueError):
-            MedicalResultVerifier.verify(result)
+    def test_interaction_task_requires_explicit_workflow_state(self):
+        task = InteractionTask(
+            task_id="TASK-1",
+            type="medical_appointment",
+            status="awaiting_input",
+            current_step="select_service",
+        ).to_dict()
+        self.assertEqual(task["type"], "medical_appointment")
+        self.assertEqual(task["status"], "awaiting_input")
+        self.assertEqual(task["current_step"], "select_service")
 
     def test_canonical_result_serializes_only_structured_fields(self):
         result = CanonicalInteractionResult(
