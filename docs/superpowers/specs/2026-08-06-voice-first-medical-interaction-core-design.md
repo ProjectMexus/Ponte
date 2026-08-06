@@ -10,9 +10,9 @@ ASR text remains an internal semantic representation. It does not make the appli
 
 This slice covers the existing medical enquiry and appointment workflow, including service discovery, slot selection, confirmation, execution, recovery, completion, and a printable receipt artifact.
 
-It does not yet migrate cash sharing or elderly activities. It also deliberately excludes production-grade task versioning, confirmation expiry, digests, durable execution attempts, complex idempotency, and multiple concurrent active tasks.
+Cash sharing was subsequently added as a read-only `CashSharingWorkflow` through the same Core. Elderly activities remain on the explicitly temporary legacy surface until the activity migration. This slice deliberately excludes production-grade task versioning, confirmation expiry, digests, durable execution attempts, complex idempotency, and multiple concurrent active tasks.
 
-The migration is incremental by use case but a hard cutover at the contract boundary. Medical requests use the new event/result contracts directly. The old `/api/interactions/message` and `/api/interactions/action` contracts and old medical workflow path are removed; no compatibility request or response projection is introduced.
+The migration is incremental by use case but a hard cutover at the contract boundary. Medical and cash requests use the new event/result contracts directly. The old `/api/interactions/message` and `/api/interactions/action` contracts no longer run medical or cash-sharing workflows; the legacy routes remain only for elderly activities and MCP diagnostics and reject medical or cash requests with `INTERACTION_EVENT_REQUIRED` before any tool execution. No compatibility request or response projection is introduced.
 
 ## Architecture
 
@@ -27,10 +27,15 @@ STT Adapter                              POST /api/interactions
                             ▼
                     InteractionCore
                     ├─ intent understanding
-                    ├─ task creation and recovery
-                    ├─ workflow progression
-                    ├─ confirmation handling
-                    └─ execution verification
+                    ├─ task loading and persistence
+                    ├─ workflow selection
+                    └─ event routing
+                            │
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+      MedicalWorkflow            CashSharingWorkflow
+   (confirmation, execution,    (read-only plan query,
+    verification, receipt)       verified facts, no receipt)
                             │
                             ▼
                  Canonical InteractionResult
@@ -44,6 +49,29 @@ STT Adapter                              POST /api/interactions
                             ▼
                Unified Interaction Response
 ```
+
+## Implemented Demo Architecture (2026-08-06)
+
+The shipped Demo follows one Core path for medical and cash:
+
+```text
+Frontend
+  → InteractionCore
+  → MedicalWorkflow | CashSharingWorkflow
+  → ExecutionPipeline (conceptual ToolExecutor; rename deferred)
+  → Backend APIs
+  → Verified InteractionResult
+  → ResponseComposer + WorkspaceProjector
+```
+
+Implemented ownership rules:
+
+- `InteractionCore` loads/saves the session task and selects the workflow. It contains no medical or cash steps, tool names, backend verification, confirmation transition, recovery mapping, or receipt construction.
+- Each concrete workflow mutates the task and owns its domain behavior: `MedicalWorkflow` owns the full enquiry/booking flow, confirmation handling, execution verification, recovery mapping, and receipt construction; `CashSharingWorkflow` owns the read-only plan query and its verifier.
+- The `ExecutionPipeline` name remains intentionally unchanged for the Demo; it is the conceptual ToolExecutor and only reports transport success, never business completion.
+- Medical completion is verified and carries the backend business receipt.
+- Cash completion is verified read-only and returns `receipt: null` with an explicit TODO: receipt semantics remain undefined until the backend issues a business reference and timestamp. Incomplete backend workflows must not receive invented completion or receipt semantics.
+- The legacy controller retains only elderly activity support and MCP diagnostics (including diagnostic confirmation/cancellation and confirmation-time idempotency) until the activity migration; legacy medical/cash requests are rejected before any tool execution.
 
 `POST /api/voice/turn` is an audio input adapter only:
 
@@ -133,7 +161,7 @@ Example task:
 }
 ```
 
-For a confirmation decision, the Core checks only that:
+For a confirmation decision, `MedicalWorkflow` checks only that:
 
 - the task exists;
 - the confirmation ID matches the task's pending confirmation;
@@ -182,7 +210,7 @@ receipt_created
 
 `ExecutionPipeline` executes a tool and returns a unified `ToolExecutionResult`. It knows whether the tool call returned successfully, but it does not know whether an appointment is complete in business terms.
 
-The `InteractionCore` owns domain completion:
+`MedicalWorkflow` owns domain completion (the Core only routes events and persists task state):
 
 ```text
 approve
@@ -197,7 +225,7 @@ approve
 → Canonical InteractionResult
 ```
 
-The medical verifier requires a successful tool result and the appointment, task, and backend receipt fields needed to prove completion. Only after verification succeeds may the Core extract safe facts and build a receipt. The task is marked `completed` only after receipt construction succeeds.
+The medical verifier requires a successful tool result and the appointment, task, and backend receipt fields needed to prove completion. Only after verification succeeds may the workflow extract safe facts and build a receipt. The task is marked `completed` only after receipt construction succeeds.
 
 `ActionReceiptBuilder` accepts verified safe facts only. It cannot consume raw tool requests, raw backend payloads, internal request IDs, or patient identifiers. A canonical medical receipt is:
 
@@ -244,7 +272,7 @@ An invalid backend response is represented as:
 }
 ```
 
-Only unrecoverable program errors use `failed`. Expected medical recovery mappings include slot unavailable, duplicate appointment, missing referral, and temporary backend unavailability. The Core maps these to deterministic next steps such as choosing another slot, supplying required information, retrying, requesting human help, or cancelling.
+Only unrecoverable program errors use `failed`. Expected medical recovery mappings include slot unavailable, duplicate appointment, missing referral, and temporary backend unavailability. The medical workflow maps these to deterministic next steps such as choosing another slot, supplying required information, retrying, requesting human help, or cancelling.
 
 ## Canonical Interaction Result
 
@@ -358,7 +386,7 @@ appointment_recovery
 appointment_completed
 ```
 
-The projector adds deterministic display labels and formatting, but copies each complete action target issued by the Core. The frontend submits the `event` unchanged.
+The projector adds deterministic display labels and formatting, but copies each complete action target issued by the workflow through the canonical result. The frontend submits the `event` unchanged.
 
 ## Delivery and TTS
 
@@ -504,8 +532,8 @@ The medical migration is complete when:
 1. All medical input reaches one `InteractionCore` through an `EventEnvelope`.
 2. The voice endpoint contains no separate medical workflow, confirmation, execution, or receipt logic.
 3. Session, task, and confirmation follow the simplified Demo model.
-4. The Core, not the Execution Pipeline, verifies business completion.
-5. A receipt is successfully built from verified safe facts before the task becomes completed, then attached in the same Core handler.
+4. The medical workflow, not the Core or the Execution Pipeline, verifies business completion.
+5. A receipt is successfully built from verified safe facts before the task becomes completed, then attached in the same workflow handler.
 6. Response wording cannot control workflow or workspace behavior.
 7. Workspace actions contain complete server-issued targets and are submitted unchanged.
 8. The frontend contains no natural-language workflow parsing.

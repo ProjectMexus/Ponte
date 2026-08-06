@@ -1,6 +1,6 @@
 # Ponte Middleware
 
-Ponte middleware 是前端唯一需要呼叫的 HTTP bridge。它以 Python 標準庫提供固定 API，將 Interaction Controller 的醫療查詢及預約流程接到既有 21 個 MCP tools；runtime 會由 middleware 啟動一個 `python -m MCP` stdio child，再由 MCP 的 RestAdapter 連接 mock backend。前端不需要知道 backend URL、HTTP method、headers 或 MCP envelope。
+Ponte middleware 是前端唯一需要呼叫的 HTTP bridge。它以 Python 標準庫提供固定 API，把 `InteractionCore` 與 `MedicalWorkflow`／`CashSharingWorkflow` 的任務流程接到既有 21 個 MCP tools；runtime 會由 middleware 啟動一個 `python -m MCP` stdio child，再由 MCP 的 RestAdapter 連接 mock backend。前端不需要知道 backend URL、HTTP method、headers 或 MCP envelope。
 
 ## 啟動
 
@@ -107,74 +107,38 @@ Task Recovery LLM 使用另一組獨立設定：`PONTE_TASK_RECOVERY_LLM_API_URL
 
 回傳既有固定 registry catalog。middleware 不接受瀏覽器提供任意 URL、method、header 或 filesystem path。
 
-### `POST /api/interactions/message`
+### `POST /api/interactions`
 
-這是前端文字或語音 transcript 的入口：
+醫療與現金分享流程的 canonical 入口，接收一個 `EventEnvelope`：
+
+```json
+{
+  "routing": {"session_id": "demo-session-1", "interaction_id": "INT-1"},
+  "event": {"type": "user_utterance", "task_id": null, "content": "我想預約醫療服務"}
+}
+```
+
+回應包含 `task`、`response`（display/speech 文字）、`workspace`（view、fields、server-issued actions）、`confirmation`、`recovery`、`receipt` 與 `speech_audio`。前端把 `workspace.actions[].event` 原樣回傳即可推進任務，不需要自行解析文字或構造 action。
+
+醫療流程由 `MedicalWorkflow` 擁有：服務選擇 → 時段選擇 → 確認 → 驗證後建立預約並附上 backend 業務回執；完成前 `receipt` 為 `null`。現金分享由 `CashSharingWorkflow` 以唯讀查詢完成：成功時回傳驗證過的 `cash_sharing_summary` facts、沒有 confirmation 或變更動作，`receipt` 固定為 `null`（backend 尚未提供業務收據參考）。
+
+`POST /api/voice/turn` 是音訊輸入適配層：STT 結果轉為 `user_utterance` EventEnvelope 後進入同一個 `InteractionCore`，沒有獨立的語音 workflow 路徑。
+
+### `POST /api/interactions/message` 與 `/api/interactions/action`（臨時 legacy surface）
+
+這兩條 route 目前只服務長者文娛活動查詢與 MCP 診斷：
 
 ```json
 {
   "session_id": "demo-session-1",
-  "message": "我想查詢自己的醫療預約",
+  "message": "我想找長者文娛活動",
   "source": "text"
 }
 ```
 
-`source` 可為 `text` 或 `voice`。醫療意圖分為兩條流程：輸入「我想查詢自己的醫療預約」只會呼叫 `medical.get_my_appointments`，返回自己的預約記錄並完成，不會搜尋服務或改變 mock state；輸入「我想預約醫療服務」才會初始化服務選擇。所有 workflow 都會回傳 `task_state`、`current_step`、`steps`、`tool_events`、`actions` 和 `data`。
+醫療與現金分享請求會在任何工具執行前被拒絕，回 HTTP 400、`code: INTERACTION_EVENT_REQUIRED`；同樣地，已退役的醫療 action（`search_slots`、`select_slot`、`confirm` 等）一律回 400。legacy surface 保留到長者活動遷移到 canonical 合約後才移除。
 
-預約流程會先返回真正仍有名額的服務；`medical.list_appointment_services` 預設以 mock backend 的 appointment slot 剩餘容量過濾，不只依賴 active service catalog。前端選擇服務和日期範圍後，透過 `search_slots` 呼叫 `medical.search_appointment_slots`；可預約時段會出現在回應的 `data.slots`。選擇一個時段後，只有再收到明確的 `confirm` action，middleware 才會呼叫 `medical.create_appointment` 並將記錄寫入 mock backend。若時段在查詢後被其他人搶走，backend 會返回 `SLOT_NOT_AVAILABLE`，同一 task 會進入 Task Recovery，提供重新搜尋其他時段的方案。之後用「我想查詢自己的醫療預約」即可讀回該記錄。
-
-可直接輸入以下訊息測試自然語言 workflow：
-
-```text
-我想查現金分享計劃
-我想找長者文娛活動
-```
-
-它們分別呼叫 `one_account.get_cash_sharing_plan`（input `{}`）及
-`one_account.search_elderly_activities`（input `{"available_only": true}`）。
-
-### `POST /api/interactions/action`
-
-所有流程 action 都由 middleware 決定結果：
-
-搜尋時段：
-
-```json
-{
-  "session_id": "demo-session-1",
-  "action": "search_slots",
-  "payload": {
-    "service_id": "SERVICE-US-001",
-    "date_from": "2026-08-10",
-    "date_to": "2026-08-14"
-  }
-}
-```
-
-選擇時段：
-
-```json
-{
-  "session_id": "demo-session-1",
-  "action": "select_slot",
-  "payload": {"slot_id": "SLOT-US-20260812-1400"}
-}
-```
-
-明確確認後才可正式提交；`confirmation` 不會被放入 backend body，backend 只會收到 registry contract 定義的欄位和 `consent: true`：
-
-```json
-{
-  "session_id": "demo-session-1",
-  "action": "confirm",
-  "payload": {
-    "referring_appointment_id": "APT-REF-1",
-    "administrative_note": "請按指示提前報到"
-  }
-}
-```
-
-其他固定 action 是 `cancel`、`retry` 和 `human_help`。未確認前的 cancel 不會呼叫 `medical.create_appointment`；直接呼叫該 tool 也會被拒絕並回 `CONFIRMATION_REQUIRED`。
+前端文字輸入「我想找長者文娛活動」會呼叫 `one_account.search_elderly_activities`（input `{"available_only": true}`）。MCP 診斷命令如 `mcp medical.list_departments {}` 也走這條 route，回應會附上 `mode=mcp_diagnostic`、registry 的 HTTP contract、tool event 和 backend response；診斷 POST tool 必須透過 `confirm_tool` action 確認。
 
 ### `POST /api/mcp/tools/call`
 
@@ -192,7 +156,7 @@ Task Recovery LLM 使用另一組獨立設定：`PONTE_TASK_RECOVERY_LLM_API_URL
 
 middleware 會以設定值覆蓋 authorization、patient、language 和 request ID，再透過 MCP stdio 傳給受控 adapter；client 不能注入任意 backend headers。MCP 或 backend error 會以 `ok: false` 安全返回，malformed request、unknown tool 和 invalid arguments 則回 HTTP 400。
 
-前端文字輸入也支援 MCP 診斷命令，例如 `mcp medical.list_departments {}`。該命令會走 `/api/interactions/message`，回應會附上 `mode=mcp_diagnostic`、registry 的 HTTP contract、tool event 和 backend response。診斷 POST tool 必須透過 `confirm_tool` action 確認；低階 `/api/mcp/tools/call` 只允許 GET tool，避免繞過確認流程。
+低階 `/api/mcp/tools/call` 只允許 GET tool；診斷 POST tool 一律須經文字輸入的診斷命令加 `confirm_tool` action 確認，避免繞過確認流程。
 
 ## CORS 與前端
 
