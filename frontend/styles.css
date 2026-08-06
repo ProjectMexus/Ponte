@@ -98,7 +98,7 @@ body[data-voice-state="error"] .voice-status-label, body[data-voice-state="audio
 .exception-close:hover { color: var(--ink); border-color: rgba(10, 132, 255, .5); transform: translateY(-1px); }
 
 /* Canonical server-projected workspace elements share the exception card look. */
-.workspace-view { margin: -4px 0 18px; color: var(--muted); font-size: .64rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+.workspace-view { display: none; }
 .workspace-fields { display: grid; gap: 8px; margin: 0 0 16px; padding: 0; }
 .workspace-field { display: flex; justify-content: space-between; gap: 18px; padding: 13px 15px; border: 1px solid rgba(95, 121, 213, .11); border-radius: 13px; background: rgba(255, 255, 255, .48); font-size: .8rem; }
 .workspace-field dt { color: var(--muted); }

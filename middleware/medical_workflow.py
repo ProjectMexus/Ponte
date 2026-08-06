@@ -433,7 +433,10 @@ class MedicalWorkflow:
         if response_intent == "select_service":
             for service in facts.get("services", []):
                 if isinstance(service, Mapping) and isinstance(service.get("id"), str):
-                    actions.append(self._action("選擇服務", {
+                    # Generate a more specific label with service name
+                    service_name = service.get("name") or service.get("display") or "服務"
+                    label = f"選擇 {service_name}"
+                    actions.append(self._action(label, {
                         "type": "service_selected",
                         "action_id": _identifier("ACT"),
                         "task_id": task_id,
@@ -444,7 +447,16 @@ class MedicalWorkflow:
         elif response_intent == "select_slot":
             for slot in facts.get("slots", []):
                 if isinstance(slot, Mapping) and isinstance(slot.get("id"), str):
-                    actions.append(self._action("選擇時段", {
+                    # Generate a more specific label with date/time
+                    start = slot.get("start", "")
+                    if isinstance(start, str) and len(start) >= 16:
+                        # Extract MM-DD HH:MM from ISO datetime
+                        date_part = start[5:10].replace("-", "/")
+                        time_part = start[11:16]
+                        label = f"選擇 {date_part} {time_part}"
+                    else:
+                        label = "選擇時段"
+                    actions.append(self._action(label, {
                         "type": "slot_selected",
                         "action_id": _identifier("ACT"),
                         "task_id": task_id,

@@ -44,7 +44,6 @@ function renderWorkspaceCard(container, workspace, onAction) {
   const card = container.children[childCount];
   if (!card) return;
   card.classList.add("voice-exception-card");
-  card.insertBefore(element("p", "exception-kicker", "Workspace"), card.firstChild);
   // The first server action is the expected next step for the user.
   card.querySelector(".action-button")?.classList.add("is-primary");
 }
