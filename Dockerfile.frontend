@@ -1,0 +1,11 @@
+# Ponte frontend image: nginx serves the static UI and proxies /api/ to the
+# middleware container, so the browser only talks to one same-origin URL.
+FROM nginx:1.27-alpine
+
+COPY frontend.nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/ /usr/share/nginx/html/
+# The avatar lives at the repository root and is served as /ponte2.jpg by the
+# local Python static server; reproduce that explicit route.
+COPY ponte2.jpg /usr/share/nginx/assets/ponte2.jpg
+
+EXPOSE 80

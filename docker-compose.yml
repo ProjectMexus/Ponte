@@ -1,0 +1,75 @@
+# Ponte web demo stack.
+#
+# Browser-facing entry point: http://localhost:5173
+# The frontend nginx container proxies /api/ to the middleware container,
+# so the browser uses same-origin URLs only. Port 8090 is also published
+# for host-side health checks against the middleware directly.
+name: ponte-web-demo
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.middleware
+    image: ponte-python:latest
+    command: ["python", "-m", "mock_backends.server", "--host", "0.0.0.0", "--port", "8080", "--data-dir", "/app/database"]
+    volumes:
+      - ponte-data:/app/database
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/mock/medical/v1/departments', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+  middleware:
+    image: ponte-python:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.middleware
+    command: ["python", "-m", "middleware.server", "--host", "0.0.0.0", "--port", "8090"]
+    environment:
+      PONTE_BACKEND_URL: http://backend:8080
+      PONTE_FRONTEND_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      PONTE_LOG_LEVEL: ${PONTE_LOG_LEVEL:-INFO}
+      PONTE_PATIENT_ID: ${PONTE_PATIENT_ID:-PAT-DEMO-001}
+      PONTE_MOCK_USER_ID: ${PONTE_MOCK_USER_ID:-USR-DEMO-001}
+      PONTE_AUTHORIZATION: ${PONTE_AUTHORIZATION:-Bearer mock-user-token}
+      # Optional intent LLM; the middleware falls back to deterministic
+      # keyword recognition when no key is configured.
+      PONTE_LLM_API_URL: ${PONTE_LLM_API_URL:-}
+      PONTE_LLM_API_KEY: ${PONTE_LLM_API_KEY:-}
+      PONTE_LLM_MODEL: ${PONTE_LLM_MODEL:-}
+      # Optional task recovery LLM; empty URL keeps the deterministic fallback.
+      PONTE_TASK_RECOVERY_LLM_API_URL: ${PONTE_TASK_RECOVERY_LLM_API_URL:-}
+      PONTE_TASK_RECOVERY_LLM_API_KEY: ${PONTE_TASK_RECOVERY_LLM_API_KEY:-}
+      PONTE_TASK_RECOVERY_LLM_MODEL: ${PONTE_TASK_RECOVERY_LLM_MODEL:-}
+    ports:
+      - "8090:8090"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/api/health', timeout=5)"]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      middleware:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  ponte-data:

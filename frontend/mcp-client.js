@@ -9,14 +9,17 @@ export class MiddlewareError extends Error {
 }
 
 function defaultBaseUrl() {
-  if (globalThis.PONTE_MIDDLEWARE_URL) {
-    return globalThis.PONTE_MIDDLEWARE_URL;
+  const queryOverride = new URLSearchParams(window.location.search).get("middleware");
+  if (queryOverride) {
+    return queryOverride.replace(/\/+$/, "");
   }
-  if (typeof globalThis.location !== "undefined") {
-    const configured = new URL(globalThis.location.href).searchParams.get("middleware");
-    if (configured) return configured;
+
+  const configured = window.PONTE_MIDDLEWARE_URL;
+  if (configured) {
+    return configured.replace(/\/+$/, "");
   }
-  return "http://127.0.0.1:8090";
+
+  return "";
 }
 
 export class MiddlewareClient {
@@ -83,8 +86,16 @@ export class MiddlewareClient {
     });
   }
 
-  absoluteUrl(path) {
-    return new URL(path, `${this.baseUrl}/`).toString();
+      absoluteUrl(path) {
+    if (/^https?:\/\//i.test(path)) {
+      return path;
+    }
+
+    if (this.baseUrl) {
+      return new URL(path, `${this.baseUrl}/`).toString();
+    }
+
+    return new URL(path, window.location.origin).toString();
   }
 
   sendVoiceTurn({ sessionId, turnId, audio, signal }) {

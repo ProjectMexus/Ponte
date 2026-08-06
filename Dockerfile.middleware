@@ -1,0 +1,21 @@
+# Ponte middleware image. The same image also runs the mock backends by
+# overriding the command in docker-compose.yml, because both services are
+# pure Python 3.13 standard library processes sharing this repository.
+FROM python:3.13-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+# Runtime packages only: the middleware starts the MCP child with
+# `sys.executable -m MCP` from the project root, so MCP/ and
+# ponte_logging.py must sit next to middleware/.
+COPY ponte_logging.py ./
+COPY MCP ./MCP
+COPY middleware ./middleware
+COPY mock_backends ./mock_backends
+
+EXPOSE 8090
+
+CMD ["python", "-m", "middleware.server", "--host", "0.0.0.0", "--port", "8090"]
