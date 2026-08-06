@@ -1,0 +1,34 @@
+# Render Blueprint for Ponte web demo.
+# Deploy via: https://dashboard.render.com/blueprint/deploy
+services:
+  - type: web
+    name: ponte-web-demo
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    envVars:
+      - key: PONTE_BACKEND_URL
+        value: http://127.0.0.1:8080
+      - key: PONTE_FRONTEND_ORIGINS
+        # Render will substitute the service's own URL; update after first deploy
+        # with the actual URL (e.g., https://ponte-web-demo.onrender.com).
+        value: https://ponte-web-demo.onrender.com
+      - key: PONTE_LOG_LEVEL
+        value: INFO
+      - key: PONTE_PATIENT_ID
+        value: PAT-DEMO-001
+      - key: PONTE_MOCK_USER_ID
+        value: USR-DEMO-001
+      - key: PONTE_AUTHORIZATION
+        value: Bearer mock-user-token
+      # Optional LLM configuration — set these in Render dashboard if desired.
+      - key: PONTE_LLM_API_URL
+        sync: false
+      - key: PONTE_LLM_API_KEY
+        sync: false
+      - key: PONTE_LLM_MODEL
+        sync: false
+    disk:
+      name: ponte-data
+      mountPath: /app/database
+      sizeGB: 1
