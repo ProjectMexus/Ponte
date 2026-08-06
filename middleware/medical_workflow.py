@@ -430,27 +430,9 @@ class MedicalWorkflow:
         task_id = task.get("task_id")
         facts = task.get("facts") if isinstance(task.get("facts"), Mapping) else {}
         actions: list[dict[str, Any]] = []
-        if response_intent == "select_service":
-            for service in facts.get("services", []):
-                if isinstance(service, Mapping) and isinstance(service.get("id"), str):
-                    actions.append(self._action("選擇服務", {
-                        "type": "service_selected",
-                        "action_id": _identifier("ACT"),
-                        "task_id": task_id,
-                        "service_id": service["id"],
-                        "date_from": facts.get("date_from", _today()),
-                        "date_to": facts.get("date_to", _date_plus(14)),
-                    }))
-        elif response_intent == "select_slot":
-            for slot in facts.get("slots", []):
-                if isinstance(slot, Mapping) and isinstance(slot.get("id"), str):
-                    actions.append(self._action("選擇時段", {
-                        "type": "slot_selected",
-                        "action_id": _identifier("ACT"),
-                        "task_id": task_id,
-                        "slot_id": slot["id"],
-                    }))
-        elif response_intent == "request_confirmation":
+        # select_service and select_slot actions are now embedded in field rows
+        # No separate action buttons needed for these intents
+        if response_intent == "request_confirmation":
             confirmation = task.get("pending_confirmation")
             if isinstance(confirmation, Mapping):
                 for decision, label in (

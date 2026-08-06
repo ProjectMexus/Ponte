@@ -24,6 +24,19 @@ def utterance(content):
 
 
 def action_event(response, *, decision=None, service_id=None):
+    # First check for actions embedded in fields
+    fields = response["workspace"].get("fields", [])
+    if isinstance(fields, list):
+        for field in fields:
+            if isinstance(field, dict) and "action" in field:
+                event = field["action"].get("event", {})
+                if decision is not None and event.get("decision") == decision:
+                    return event
+                if service_id is not None and event.get("service_id") == service_id:
+                    return event
+                if decision is None and service_id is None:
+                    return event
+    # Fall back to workspace.actions
     actions = response["workspace"]["actions"]
     if decision is not None:
         return next(item["event"] for item in actions if item["event"].get("decision") == decision)
@@ -169,11 +182,16 @@ class FullStackIntegrationTests(unittest.TestCase):
 
         first = interact("FULL-ALT-FIRST", "FULL-INT-01", utterance("我想預約醫療服務"))
         self.assertEqual(first["workspace"]["view"], "service_selection")
-        services_field = next(
-            record["value"] for record in first["workspace"]["fields"] if record["key"] == "services"
+        # New structure: one field per service with human-readable label and value
+        service_fields = [f for f in first["workspace"]["fields"] if f["key"].startswith("service_")]
+        self.assertTrue(len(service_fields) > 0, "Should have at least one service field")
+        # Find the physical therapy service by label (name)
+        physical_therapy_field = next(
+            (f for f in service_fields if f["label"] == "物理治療"),
+            None,
         )
-        physical_therapy = next(item for item in services_field if item["id"] == "SERVICE-PT-001")
-        self.assertEqual(physical_therapy["name"], "物理治療")
+        self.assertIsNotNone(physical_therapy_field, "Should find physical therapy service")
+        self.assertIn("45 分鐘", physical_therapy_field["value"])
 
         first_slots = interact(
             "FULL-ALT-FIRST", "FULL-INT-02", action_event(first, service_id="SERVICE-PT-001"),

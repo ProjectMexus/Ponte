@@ -44,17 +44,22 @@ function renderWorkspaceCard(container, workspace, onAction) {
   const card = container.children[childCount];
   if (!card) return;
   card.classList.add("voice-exception-card");
-  card.insertBefore(element("p", "exception-kicker", "Workspace"), card.firstChild);
+  // The first server action is the expected next step for the user.
+  card.querySelector(".action-button")?.classList.add("is-primary");
 }
 
 function renderRecovery(container, recovery) {
   if (!recovery || typeof recovery !== "object") return;
-  const panel = element("section", "recovery-panel");
+  const panel = element("section", "recovery-panel voice-exception-card");
   panel.setAttribute("role", "status");
   panel.append(element("h3", "recovery-title", "Recovery"));
   if (recovery.reason) panel.append(element("p", "recovery-explanation", String(recovery.reason)));
   container.append(panel);
 }
+
+// Informational cards (no actions) fade away on their own; decision cards
+// stay until the user acts or dismisses them.
+const AUTO_DISMISS_MS = 10000;
 
 export function createVoiceExceptions({ approvalRoot, errorRoot, artifactRoot, artifactContentRoot, onAction } = {}) {
   let lastReceipt = null;
@@ -75,6 +80,52 @@ export function createVoiceExceptions({ approvalRoot, errorRoot, artifactRoot, a
     errorRoot.hidden = true;
     errorRoot.replaceChildren();
     syncExceptionSurface();
+  }
+
+  function dismissCard(card) {
+    if (!card?.isConnected || card.classList.contains("is-leaving")) return;
+    if (card.dismissTimer) { clearTimeout(card.dismissTimer); card.dismissTimer = null; }
+    card.classList.add("is-leaving");
+    const remove = () => {
+      if (!card.isConnected) return;
+      card.remove();
+      syncExceptionSurface();
+    };
+    card.addEventListener("animationend", remove, { once: true });
+    card.dismissTimer = setTimeout(remove, 340);
+  }
+
+  function dismissAll() {
+    Array.from(approvalRoot?.children || []).forEach(dismissCard);
+    clearError();
+  }
+
+  // Toast-like behaviour for informational cards: auto-dismiss, but pause
+  // while the user is reading (hover or keyboard focus).
+  function scheduleAutoDismiss(card) {
+    const start = () => {
+      if (!card.isConnected || card.classList.contains("is-leaving") || card.dismissTimer) return;
+      card.dismissTimer = setTimeout(() => dismissCard(card), AUTO_DISMISS_MS);
+    };
+    const pause = () => {
+      if (card.dismissTimer) { clearTimeout(card.dismissTimer); card.dismissTimer = null; }
+    };
+    card.addEventListener("pointerenter", pause);
+    card.addEventListener("focusin", pause);
+    card.addEventListener("pointerleave", start);
+    card.addEventListener("focusout", start);
+    start();
+  }
+
+  function addDismiss(card, { interactive } = {}) {
+    if (!card?.isConnected || card.querySelector(".exception-close")) return;
+    const closeButton = element("button", "exception-close", "\u00d7");
+    closeButton.type = "button";
+    closeButton.setAttribute("aria-label", "Close");
+    closeButton.addEventListener("click", () => dismissCard(card));
+    card.append(closeButton);
+    if (interactive) card.querySelector(".action-button, .exception-button")?.focus();
+    else scheduleAutoDismiss(card);
   }
 
   function renderError(error) {
@@ -111,6 +162,10 @@ export function createVoiceExceptions({ approvalRoot, errorRoot, artifactRoot, a
     approvalRoot.replaceChildren();
     renderWorkspaceCard(approvalRoot, response?.workspace, onAction);
     if (!approvalRoot.children.length) renderRecovery(approvalRoot, response?.recovery);
+    Array.from(approvalRoot.children).forEach((card) => {
+      const interactive = Boolean(card.querySelector(".action-button, .exception-button"));
+      addDismiss(card, { interactive });
+    });
     syncExceptionSurface();
   }
 
@@ -132,6 +187,7 @@ export function createVoiceExceptions({ approvalRoot, errorRoot, artifactRoot, a
     button.addEventListener("click", () => openArtifact(receipt));
     card.append(button);
     approvalRoot.append(card);
+    addDismiss(card, { interactive: true });
     syncExceptionSurface();
   }
 
@@ -154,7 +210,13 @@ export function createVoiceExceptions({ approvalRoot, errorRoot, artifactRoot, a
     URL.revokeObjectURL(link.href);
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && artifactRoot && !artifactRoot.hidden) closeArtifact();
+    if (event.key !== "Escape") return;
+    if (artifactRoot && !artifactRoot.hidden) { closeArtifact(); return; }
+    dismissAll();
+  });
+  exceptionSurface?.addEventListener("pointerdown", (event) => {
+    if (event.target.closest?.(".voice-exception-card, .voice-error")) return;
+    dismissAll();
   });
 
   return { clearError, renderError, renderResponse, renderWorkspace, renderApproval, renderReceipt, openArtifact, closeArtifact };

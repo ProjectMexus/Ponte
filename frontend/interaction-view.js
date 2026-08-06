@@ -18,17 +18,30 @@ function workspaceFields(fields) {
   return Object.entries(fields).map(([label, value]) => ({ label, value }));
 }
 
-function appendWorkspaceFields(container, fields) {
+function appendWorkspaceFields(container, fields, onAction) {
   const list = createElement("dl", "workspace-fields");
+  const embeddedActionIds = new Set();
   workspaceFields(fields).forEach((field) => {
     const label = displayValue(field?.label);
     const value = displayValue(field?.value);
-    if (!label || !value) return;
-    const row = createElement("div", "workspace-field");
-    row.append(createElement("dt", "", label), createElement("dd", "", value));
-    list.append(row);
+    if (!label && !value) return;
+    // If field has an action, render as clickable row
+    if (field?.action?.event && typeof field.action.event === "object") {
+      const actionId = field.action.event.action_id;
+      if (actionId) embeddedActionIds.add(actionId);
+      const row = createElement("button", "workspace-field workspace-field-action");
+      row.type = "button";
+      row.append(createElement("span", "workspace-field-label", label), createElement("span", "workspace-field-value", value));
+      row.addEventListener("click", () => onAction?.(field.action.event));
+      list.append(row);
+    } else {
+      const row = createElement("div", "workspace-field");
+      row.append(createElement("dt", "", label), createElement("dd", "", value));
+      list.append(row);
+    }
   });
   if (list.children.length) container.append(list);
+  return embeddedActionIds;
 }
 
 function canonicalReceiptFields(receipt) {
@@ -63,11 +76,13 @@ export function renderWorkspace(container, workspace, onAction) {
   if (workspace.view) card.dataset.view = String(workspace.view);
   if (workspace.title) card.append(createElement("h2", "workspace-title", String(workspace.title)));
   if (workspace.view) card.append(createElement("p", "workspace-view", String(workspace.view)));
-  appendWorkspaceFields(card, workspace.fields);
+  const embeddedActionIds = appendWorkspaceFields(card, workspace.fields, onAction);
 
   const actions = createElement("div", "action-list");
   (Array.isArray(workspace.actions) ? workspace.actions : []).forEach((action) => {
     if (!action || typeof action !== "object" || !action.event || typeof action.event !== "object") return;
+    // Skip actions already embedded in field rows
+    if (embeddedActionIds.has(action.event.action_id)) return;
     const button = createElement("button", "action-button", action.label || "Continue");
     button.type = "button";
     // Preserve the complete event issued by the server, including identifiers.
