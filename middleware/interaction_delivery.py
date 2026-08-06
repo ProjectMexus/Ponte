@@ -239,6 +239,94 @@ def _appointment_fields(result: CanonicalInteractionResult) -> list[dict[str, An
     return [_field(key, label, details[key]) for key, label in labels if details.get(key)]
 
 
+def _appointment_list_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Generate one field per appointment with human-readable label and value."""
+    fields: list[dict[str, Any]] = []
+    for i, appt in enumerate(_as_list(facts.get("appointments"))):
+        if not isinstance(appt, Mapping):
+            continue
+        # Extract service name
+        service = appt.get("service")
+        if isinstance(service, Mapping):
+            service_name = _record_name(service, fallback="未知服務")
+        elif isinstance(service, str):
+            service_name = service
+        else:
+            service_name = "未知服務"
+        # Extract date and time from start
+        start = _text(appt.get("start"))
+        date_part = start[:10] if len(start) >= 10 else start
+        time_part = start[11:16] if len(start) >= 16 else ""
+        # Extract location
+        location = appt.get("location")
+        if isinstance(location, Mapping):
+            location_name = _record_name(location)
+        elif isinstance(location, str):
+            location_name = location
+        else:
+            location_name = ""
+        # Extract status
+        status = _text(appt.get("status"))
+        # Build value string
+        value_parts = [date_part, time_part, location_name, status]
+        value = " · ".join(filter(None, value_parts))
+        fields.append(_field(f"appointment_{i}", service_name, value))
+    return fields
+
+
+def _service_selection_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Generate one field per service with human-readable label and value."""
+    fields: list[dict[str, Any]] = []
+    for i, svc in enumerate(_as_list(facts.get("services"))):
+        if not isinstance(svc, Mapping):
+            continue
+        name = _record_name(svc, fallback="未知服務")
+        # Extract duration
+        duration = svc.get("duration_minutes")
+        duration_text = f"{duration} 分鐘" if duration else ""
+        # Build value string (department_id is just an ID, not a displayable object)
+        value = duration_text
+        fields.append(_field(f"service_{i}", name, value))
+    return fields
+
+
+def _slot_selection_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Generate one field per slot with human-readable label and value."""
+    fields: list[dict[str, Any]] = []
+    for i, slot in enumerate(_as_list(facts.get("slots"))):
+        if not isinstance(slot, Mapping):
+            continue
+        # Extract date and time from start
+        start = _text(slot.get("start"))
+        date_part = start[:10] if len(start) >= 10 else start
+        time_part = start[11:16] if len(start) >= 16 else ""
+        label = f"{date_part} {time_part}".strip() if date_part or time_part else "時段"
+        # Extract service
+        service = slot.get("service")
+        if isinstance(service, Mapping):
+            service_name = _record_name(service)
+        elif isinstance(service, str):
+            service_name = service
+        else:
+            service_name = ""
+        # Extract location
+        location = slot.get("location")
+        if isinstance(location, Mapping):
+            location_name = _record_name(location)
+        elif isinstance(location, str):
+            location_name = location
+        else:
+            location_name = ""
+        # Extract remaining capacity
+        remaining = slot.get("remaining")
+        remaining_text = f"剩餘 {remaining} 名" if remaining is not None else ""
+        # Build value string
+        value_parts = [service_name, location_name, remaining_text]
+        value = " · ".join(filter(None, value_parts))
+        fields.append(_field(f"slot_{i}", label, value))
+    return fields
+
+
 def _cash_summary_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
     plan = _as_mapping(facts.get("plan"))
     fields: list[dict[str, Any]] = []
@@ -277,11 +365,11 @@ def _fields_for(result: CanonicalInteractionResult, view: str) -> list[dict[str,
                 fields.append(_field(key, label, recovery[key]))
         return fields
     if view == "appointment_list":
-        return [_field("appointments", "醫療預約", _selection_records(facts.get("appointments")))]
+        return _appointment_list_fields(facts)
     if view == "service_selection":
-        return [_field("services", "可預約服務", _selection_records(facts.get("services")))]
+        return _service_selection_fields(facts)
     if view == "slot_selection":
-        return [_field("slots", "可預約時段", _selection_records(facts.get("slots")))]
+        return _slot_selection_fields(facts)
     if view == "appointment_confirmation":
         fields = _appointment_fields(result)
         confirmation = _as_mapping(result.confirmation)

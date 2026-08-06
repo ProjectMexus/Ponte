@@ -169,11 +169,16 @@ class FullStackIntegrationTests(unittest.TestCase):
 
         first = interact("FULL-ALT-FIRST", "FULL-INT-01", utterance("我想預約醫療服務"))
         self.assertEqual(first["workspace"]["view"], "service_selection")
-        services_field = next(
-            record["value"] for record in first["workspace"]["fields"] if record["key"] == "services"
+        # New structure: one field per service with human-readable label and value
+        service_fields = [f for f in first["workspace"]["fields"] if f["key"].startswith("service_")]
+        self.assertTrue(len(service_fields) > 0, "Should have at least one service field")
+        # Find the physical therapy service by label (name)
+        physical_therapy_field = next(
+            (f for f in service_fields if f["label"] == "物理治療"),
+            None,
         )
-        physical_therapy = next(item for item in services_field if item["id"] == "SERVICE-PT-001")
-        self.assertEqual(physical_therapy["name"], "物理治療")
+        self.assertIsNotNone(physical_therapy_field, "Should find physical therapy service")
+        self.assertIn("45 分鐘", physical_therapy_field["value"])
 
         first_slots = interact(
             "FULL-ALT-FIRST", "FULL-INT-02", action_event(first, service_id="SERVICE-PT-001"),
