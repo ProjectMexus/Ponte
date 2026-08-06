@@ -23,6 +23,37 @@ def post_json(opener, url, body):
         return json.loads(response.read())
 
 
+def post_interaction(opener, base_url, session_id, interaction_id, event):
+    return post_json(opener, base_url + "/api/interactions", {
+        "routing": {"session_id": session_id, "interaction_id": interaction_id},
+        "event": event,
+    })
+
+
+def action_event(response, *, decision=None):
+    actions = response["workspace"]["actions"]
+    if decision is None:
+        return actions[0]["event"]
+    return next(item["event"] for item in actions if item["event"].get("decision") == decision)
+
+
+def recovery_event(response, action):
+    return next(
+        item["event"]
+        for item in response["workspace"]["actions"]
+        if item["event"].get("type") == "recovery_action" and item["event"].get("action") == action
+    )
+
+
+def utterance(content):
+    return {"type": "user_utterance", "task_id": None, "content": content}
+
+
+def assert_no_legacy_fields(test_case, response):
+    for removed in ("assistant_message", "task_state", "current_step", "tool_events"):
+        test_case.assertNotIn(removed, response)
+
+
 class MiddlewareBackendIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
@@ -51,108 +82,68 @@ class MiddlewareBackendIntegrationTests(unittest.TestCase):
         self.backend.server_close()
         self.tempdir.cleanup()
 
-    def test_message_to_medical_tool_reaches_mock_backend(self):
-        response = post_json(
-            self.opener,
-            f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/message",
-            {"session_id": "S-1", "message": "我想預約醫療服務", "source": "text"},
+    def test_canonical_medical_booking_reaches_mock_backend(self):
+        base_url = f"http://127.0.0.1:{self.middleware.server_port}"
+        first = post_interaction(
+            self.opener, base_url, "S-1", "INT-1", utterance("我想預約醫療服務"),
         )
-        self.assertEqual(response["session_id"], "S-1")
-        self.assertEqual(response["task_state"], "selecting_service")
-        self.assertTrue(response["tool_events"])
-        self.assertEqual(response["tool_events"][0]["tool_name"], "medical.get_my_appointments")
+        self.assertEqual(first["workspace"]["view"], "service_selection")
+        self.assertTrue(first["workspace"]["actions"])
+        assert_no_legacy_fields(self, first)
+        task_id = first["task"]["task_id"]
 
-        service_id = response["data"]["services"][0]["id"]
-        slots_response = post_json(
-            self.opener,
-            f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/action",
-            {
-                "session_id": "S-1",
-                "action": "search_slots",
-                "payload": {
-                    "service_id": service_id,
-                    "date_from": "2026-08-10",
-                    "date_to": "2026-08-14",
-                },
-            },
-        )
-        slot_id = slots_response["data"]["slots"][0]["id"]
-        post_json(
-            self.opener,
-            f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/action",
-            {"session_id": "S-1", "action": "select_slot", "payload": {"slot_id": slot_id}},
-        )
-        final_response = post_json(
-            self.opener,
-            f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/action",
-            {
-                "session_id": "S-1",
-                "action": "confirm",
-                "payload": {"referring_appointment_id": "APT-REF-1"},
-            },
-        )
-        self.assertIn(final_response["task_state"], {"submitted", "completed"}, final_response)
-        event_names = [event["tool_name"] for event in final_response["tool_events"]]
-        self.assertIn("medical.create_appointment", event_names)
-        self.assertIn("medical.get_task_status", event_names)
-        create_event = next(event for event in final_response["tool_events"] if event["tool_name"] == "medical.create_appointment")
-        self.assertTrue(create_event["arguments"]["input"]["consent"])
-        self.assertNotIn("confirmation", create_event["arguments"]["input"])
-        appointment_id = create_event["data"]["data"]["id"]
+        second = post_interaction(self.opener, base_url, "S-1", "INT-2", action_event(first))
+        self.assertEqual(second["workspace"]["view"], "slot_selection")
 
-        queried = post_json(
-            self.opener,
-            f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/message",
-            {
-                "session_id": "S-1",
-                "message": "我想查詢自己的醫療預約",
-                "source": "text",
-            },
-        )
-        self.assertEqual(queried["task_state"], "completed")
-        self.assertEqual(
-            [event["tool_name"] for event in queried["tool_events"]],
-            ["medical.get_my_appointments"],
-        )
-        self.assertNotIn("selected_slot", queried["data"])
-        self.assertNotIn("slots", queried["data"])
-        self.assertIn(appointment_id, [item["id"] for item in queried["data"]["appointments"]])
+        third = post_interaction(self.opener, base_url, "S-1", "INT-3", action_event(second))
+        self.assertEqual(third["workspace"]["view"], "appointment_confirmation")
 
-        cancelled = post_json(
-            self.opener,
-            f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/message",
-            {"session_id": "S-2", "message": "我想預約醫療服務", "source": "text"},
+        final = post_interaction(
+            self.opener, base_url, "S-1", "INT-4", action_event(third, decision="approve"),
+        )
+        self.assertEqual(final["task"]["status"], "completed")
+        self.assertEqual(final["task"]["task_id"], task_id)
+        self.assertEqual(final["workspace"]["view"], "appointment_completed")
+        self.assertTrue(final["receipt"]["receipt_id"].startswith("MED-APT-"))
+        self.assertEqual(final["task"]["receipt"], final["receipt"])
+        assert_no_legacy_fields(self, final)
+        self.assertNotIn("patient_id", json.dumps(final, ensure_ascii=False))
+
+        queried = post_interaction(
+            self.opener, base_url, "S-1", "INT-5", utterance("我想查詢自己的醫療預約"),
+        )
+        self.assertEqual(queried["task"]["status"], "completed")
+        self.assertEqual(queried["workspace"]["view"], "appointment_list")
+        assert_no_legacy_fields(self, queried)
+        appointments = queried["task"]["facts"]["appointments"]
+        self.assertTrue(appointments)
+        confirmed_dates = [
+            item["start"][:10] for item in appointments if item.get("status") == "confirmed"
+        ]
+        self.assertIn(final["receipt"]["appointment"]["date"], confirmed_dates)
+
+        cancelled_start = post_interaction(
+            self.opener, base_url, "S-2", "INT-6", utterance("我想預約醫療服務"),
         )
         self.assertEqual(
-            {service["id"] for service in cancelled["data"]["services"]},
+            {action["event"]["service_id"] for action in cancelled_start["workspace"]["actions"]},
             {"SERVICE-US-001", "SERVICE-PT-001", "SERVICE-ECHO-001"},
         )
-        service_id_2 = next(
-            service["id"]
-            for service in cancelled["data"]["services"]
-            if service["id"] == "SERVICE-PT-001"
+        cancelled_slots = post_interaction(
+            self.opener, base_url, "S-2", "INT-7", action_event(cancelled_start),
         )
-        cancelled = post_json(
+        cancelled_confirmation = post_interaction(
+            self.opener, base_url, "S-2", "INT-8", action_event(cancelled_slots),
+        )
+        cancelled = post_interaction(
             self.opener,
-            f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/action",
-            {
-                "session_id": "S-2",
-                "action": "search_slots",
-                "payload": {"service_id": service_id_2, "date_from": "2026-08-10", "date_to": "2026-08-14"},
-            },
+            base_url,
+            "S-2",
+            "INT-9",
+            action_event(cancelled_confirmation, decision="reject"),
         )
-        cancelled = post_json(
-            self.opener,
-            f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/action",
-            {"session_id": "S-2", "action": "select_slot", "payload": {"slot_id": cancelled["data"]["slots"][0]["id"]}},
-        )
-        cancelled = post_json(
-            self.opener,
-            f"http://127.0.0.1:{self.middleware.server_port}/api/interactions/action",
-            {"session_id": "S-2", "action": "cancel", "payload": {}},
-        )
-        self.assertEqual(cancelled["task_state"], "cancelled")
-        self.assertNotIn("medical.create_appointment", [event["tool_name"] for event in cancelled["tool_events"]])
+        self.assertEqual(cancelled["task"]["status"], "cancelled")
+        self.assertIsNone(cancelled["receipt"])
 
         direct = post_json(
             self.opener,
@@ -259,38 +250,41 @@ class MiddlewareRecoveryIntegrationTests(unittest.TestCase):
 
     def test_same_task_recovers_after_backend_timeout(self):
         base_url = f"http://127.0.0.1:{self.middleware.server_port}"
-        booking = post_json(
+        booking = post_interaction(
             self.opener,
-            f"{base_url}/api/interactions/message",
-            {"session_id": "S-RECOVER-HTTP", "message": "我想預約醫療服務", "source": "text"},
+            base_url,
+            "S-RECOVER-HTTP",
+            "INT-RECOVER-1",
+            utterance("我想預約醫療服務"),
         )
-        failed = post_json(
+        self.assertEqual(booking["workspace"]["view"], "service_selection")
+        failed = post_interaction(
             self.opener,
-            f"{base_url}/api/interactions/action",
-            {
-                "session_id": "S-RECOVER-HTTP",
-                "action": "search_slots",
-                "payload": {
-                    "service_id": booking["data"]["services"][0]["id"],
-                    "date_from": "2026-08-10",
-                    "date_to": "2026-08-14",
-                },
-            },
+            base_url,
+            "S-RECOVER-HTTP",
+            "INT-RECOVER-2",
+            action_event(booking),
         )
-        self.assertEqual(failed["task_state"], "awaiting_user_input")
-        self.assertEqual(failed["recovery"]["reason_code"], "BACKEND_TIMEOUT")
+        self.assertEqual(failed["task"]["status"], "awaiting_input")
+        self.assertEqual(failed["workspace"]["view"], "appointment_recovery")
+        self.assertEqual(failed["recovery"]["reason"], "backend_unavailable")
+        self.assertIsNone(failed["receipt"])
+        assert_no_legacy_fields(self, failed)
 
-        recovered = post_json(
+        recovered = post_interaction(
             self.opener,
-            f"{base_url}/api/interactions/action",
-            {"session_id": "S-RECOVER-HTTP", "action": "retry", "payload": {}},
+            base_url,
+            "S-RECOVER-HTTP",
+            "INT-RECOVER-3",
+            recovery_event(failed, "retry"),
         )
-        self.assertEqual(recovered["task_state"], "selecting_slot")
-        self.assertEqual(recovered["data"]["service_id"], "SERVICE-US-001")
+        self.assertEqual(recovered["task"]["status"], "awaiting_input")
+        self.assertEqual(recovered["workspace"]["view"], "slot_selection")
         self.assertEqual(
-            [event["step_id"] for event in recovered["tool_events"]],
-            ["load_appointments", "load_services", "search_slots", "search_slots"],
+            [item["id"] for item in recovered["task"]["facts"]["slots"]],
+            ["SLOT-US-20260812-1400"],
         )
+        self.assertIsNone(recovered["recovery"])
         self.assertEqual(self.mcp_client.slot_attempts, 2)
 
     def test_same_task_exposes_recovery_after_mcp_duplicate_booking(self):
@@ -309,48 +303,56 @@ class MiddlewareRecoveryIntegrationTests(unittest.TestCase):
         self.middleware_thread.start()
 
         base_url = f"http://127.0.0.1:{self.middleware.server_port}"
-        booking = post_json(
+        booking = post_interaction(
             self.opener,
-            f"{base_url}/api/interactions/message",
-            {"session_id": "S-DUPLICATE-HTTP", "message": "我想預約醫療服務", "source": "text"},
+            base_url,
+            "S-DUPLICATE-HTTP",
+            "INT-DUPLICATE-1",
+            utterance("我想預約醫療服務"),
         )
-        post_json(
+        slots = post_interaction(
             self.opener,
-            f"{base_url}/api/interactions/action",
-            {
-                "session_id": "S-DUPLICATE-HTTP",
-                "action": "search_slots",
-                "payload": {
-                    "service_id": booking["data"]["services"][0]["id"],
-                    "date_from": "2026-08-10",
-                    "date_to": "2026-08-14",
-                },
-            },
+            base_url,
+            "S-DUPLICATE-HTTP",
+            "INT-DUPLICATE-2",
+            action_event(booking),
         )
-        post_json(
+        confirmation = post_interaction(
             self.opener,
-            f"{base_url}/api/interactions/action",
-            {
-                "session_id": "S-DUPLICATE-HTTP",
-                "action": "select_slot",
-                "payload": {"slot_id": "SLOT-US-20260812-1400"},
-            },
+            base_url,
+            "S-DUPLICATE-HTTP",
+            "INT-DUPLICATE-3",
+            action_event(slots),
         )
-        failed = post_json(
+        failed = post_interaction(
             self.opener,
-            f"{base_url}/api/interactions/action",
-            {"session_id": "S-DUPLICATE-HTTP", "action": "confirm", "payload": {}},
+            base_url,
+            "S-DUPLICATE-HTTP",
+            "INT-DUPLICATE-4",
+            action_event(confirmation, decision="approve"),
         )
 
-        self.assertEqual(failed["task_state"], "awaiting_user_input")
-        self.assertEqual(failed["recovery"]["reason_code"], "DUPLICATE_BOOKING")
-        self.assertIn("其他可預約時段", failed["recovery"]["explanation"])
-        picker = next(
-            action for action in failed["actions"]
-            if action["kind"] == "select_service"
+        self.assertEqual(failed["task"]["status"], "awaiting_input")
+        self.assertEqual(failed["workspace"]["view"], "appointment_recovery")
+        self.assertEqual(failed["recovery"]["reason"], "duplicate_booking")
+        self.assertIsNone(failed["receipt"])
+        self.assertEqual(
+            [item["event"]["action"] for item in failed["workspace"]["actions"]],
+            ["retry", "human_help", "cancel"],
         )
-        self.assertEqual(picker["payload"], {})
         self.assertNotIn("RAW BACKEND CONFLICT MESSAGE", str(failed))
+        assert_no_legacy_fields(self, failed)
+
+        retried = post_interaction(
+            self.opener,
+            base_url,
+            "S-DUPLICATE-HTTP",
+            "INT-DUPLICATE-5",
+            recovery_event(failed, "retry"),
+        )
+        self.assertEqual(retried["task"]["status"], "awaiting_input")
+        self.assertEqual(retried["recovery"]["reason"], "duplicate_booking")
+        self.assertIsNone(retried["receipt"])
 
 
 if __name__ == "__main__":

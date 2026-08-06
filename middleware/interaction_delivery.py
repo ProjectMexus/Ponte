@@ -121,7 +121,9 @@ class ResponseComposer:
         status = _normalised(task.get("status"))
         details = _appointment_details(result)
 
-        if status == "completed" or result.receipt is not None or intent in _COMPLETED_INTENTS:
+        if intent == "appointment_list" or "appointments" in facts:
+            display_text = "我已查到你的醫療預約。"
+        elif status == "completed" or result.receipt is not None or intent in _COMPLETED_INTENTS:
             display_text = "預約已完成。"
             receipt = _as_mapping(result.receipt)
             if receipt.get("receipt_id"):
@@ -145,8 +147,6 @@ class ResponseComposer:
             services = _as_list(facts.get("services"))
             prefix = f"我已查到 {len(services)} 項可預約服務。" if services else ""
             display_text = f"{prefix}請選擇你想預約的服務。"
-        elif intent == "appointment_list" or "appointments" in facts:
-            display_text = "我已查到你的醫療預約。"
         else:
             display_text = "請選擇下一步。"
 
@@ -162,14 +162,14 @@ def _view_for(result: CanonicalInteractionResult) -> str:
     facts = _facts(result)
     status = _normalised(task.get("status"))
 
+    if intent == "appointment_list" or "appointments" in facts:
+        return "appointment_list"
     if status == "completed" or result.receipt is not None or intent in _COMPLETED_INTENTS:
         return "appointment_completed"
     if result.recovery is not None or status in {"recovery", "awaiting_recovery"} or intent in _RECOVERY_INTENTS:
         return "appointment_recovery"
     if result.confirmation is not None or status == "awaiting_confirmation" or intent in _CONFIRMATION_INTENTS:
         return "appointment_confirmation"
-    if intent == "appointment_list" or "appointments" in facts:
-        return "appointment_list"
     if intent in _SLOT_INTENTS or task.get("current_step") in {"select_slot", "slot_selection"} or "slots" in facts:
         return "slot_selection"
     if intent in _SERVICE_INTENTS or task.get("current_step") in {"select_service", "service_selection"} or "services" in facts:

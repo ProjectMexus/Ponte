@@ -64,6 +64,11 @@ class FrontendInteractionContractTests(unittest.TestCase):
         self.assertNotIn("innerHTML", self.view)
         self.assertNotIn("innerHTML", self.exceptions)
 
+    def test_medical_interactions_use_only_the_canonical_endpoint(self):
+        for source in (self.app, self.client, self.view, self.exceptions):
+            self.assertNotIn("/api/interactions/message", source)
+            self.assertNotIn("/api/interactions/action", source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 import unittest
 
 from middleware.interaction_core import InteractionCore
+from middleware.medical_workflow import MedicalWorkflow
 from middleware.interaction_delivery import DeliveryOrchestrator
 from middleware.interaction_voice import CoreVoiceTurnProvider
 from middleware.session import SessionStore
@@ -26,11 +27,8 @@ class BrokenTextToSpeech:
 class CoreVoiceTurnProviderTests(unittest.TestCase):
     def test_audio_and_transcript_enter_the_same_core_contract(self):
         core = InteractionCore(
-            FakePipeline(),
             SessionStore(),
-            "PAT-DEMO-001",
-            "Bearer demo",
-            mock_user_id="USR-DEMO-001",
+            MedicalWorkflow(FakePipeline(), "PAT-DEMO-001", "Bearer demo"),
             intent_recognizer=FakeIntentRecognizer(),
         )
         provider = CoreVoiceTurnProvider(
@@ -53,11 +51,8 @@ class CoreVoiceTurnProviderTests(unittest.TestCase):
 
     def test_tts_failure_does_not_fail_the_interaction(self):
         core = InteractionCore(
-            FakePipeline(),
             SessionStore(),
-            "PAT-DEMO-001",
-            "Bearer demo",
-            mock_user_id="USR-DEMO-001",
+            MedicalWorkflow(FakePipeline(), "PAT-DEMO-001", "Bearer demo"),
             intent_recognizer=FakeIntentRecognizer(),
         )
         provider = CoreVoiceTurnProvider(

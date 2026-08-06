@@ -77,7 +77,10 @@ class InteractionHttpTests(unittest.TestCase):
 
         final = post_json(self.opener, self.url + "/api/interactions", self.event("INT-4", approve_event))
         self.assertEqual(final["task"]["status"], "completed")
+        self.assertEqual(final["workspace"]["view"], "appointment_completed")
         self.assertTrue(final["receipt"]["receipt_id"].startswith("MED-APT-"))
+        for removed in ("assistant_message", "task_state", "current_step", "tool_events"):
+            self.assertNotIn(removed, final)
         self.assertNotIn("patient_id", json.dumps(final, ensure_ascii=False))
 
 

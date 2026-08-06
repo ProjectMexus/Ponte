@@ -2,22 +2,42 @@ import json
 import tempfile
 import threading
 import unittest
-from datetime import datetime, timedelta
-from urllib.error import HTTPError
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
 
 from frontend.server import create_http_server as create_frontend_http_server
 from middleware.intent import KeywordIntentRecognizer
 from middleware.server import create_application, create_http_server
-from middleware.task_manager.interpreter import DeterministicTaskRecoveryInterpreter
 from mock_backends.server import create_http_server as create_backend_http_server
-from mock_backends.core.clock import MACAU_TZ
 
 
-def booking_window():
-    today = datetime.now(MACAU_TZ).date()
-    return today.isoformat(), (today + timedelta(days=14)).isoformat()
+def interaction_body(session_id, interaction_id, event):
+    return {
+        "routing": {"session_id": session_id, "interaction_id": interaction_id},
+        "event": event,
+    }
+
+
+def utterance(content):
+    return {"type": "user_utterance", "task_id": None, "content": content}
+
+
+def action_event(response, *, decision=None, service_id=None):
+    actions = response["workspace"]["actions"]
+    if decision is not None:
+        return next(item["event"] for item in actions if item["event"].get("decision") == decision)
+    if service_id is not None:
+        return next(item["event"] for item in actions if item["event"].get("service_id") == service_id)
+    return actions[0]["event"]
+
+
+def recovery_event(response, action):
+    return next(
+        item["event"]
+        for item in response["workspace"]["actions"]
+        if item["event"].get("type") == "recovery_action" and item["event"].get("action") == action
+    )
 
 
 class FullStackIntegrationTests(unittest.TestCase):
@@ -97,22 +117,22 @@ class FullStackIntegrationTests(unittest.TestCase):
         client_js = self.get("/mcp-client.js")
         health = self.get_middleware("/api/health")
         response = self.post_middleware(
-            "/api/interactions/message",
-            {
-                "session_id": "BROWSER-SMOKE-1",
-                "message": "我想查詢自己的醫療預約",
-                "source": "text",
-            },
+            "/api/interactions",
+            interaction_body(
+                "BROWSER-SMOKE-1",
+                "FULL-SMOKE-1",
+                utterance("我想查詢自己的醫療預約"),
+            ),
         )
 
         self.assertIn("Ponte 語音服務", html)
         self.assertIn("MiddlewareClient", client_js)
         self.assertTrue(health["backend_reachable"])
-        self.assertEqual(response["task_state"], "completed")
-        self.assertEqual(
-            [event["tool_name"] for event in response["tool_events"]],
-            ["medical.get_my_appointments"],
-        )
+        self.assertEqual(response["task"]["status"], "completed")
+        self.assertEqual(response["workspace"]["view"], "appointment_list")
+        self.assertEqual(response["task"]["facts"]["appointments"], [])
+        for removed in ("assistant_message", "task_state", "current_step", "tool_events"):
+            self.assertNotIn(removed, response)
 
         process = self.middleware_app.mcp_client.process
         self.assertIsNotNone(process)
@@ -135,152 +155,61 @@ class FullStackIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(response["data"]["cash_sharing_plan"]["plan"]["year"], 2026)
 
-    def test_duplicate_booking_recovery_offers_other_available_service(self):
-        self.middleware_app.controller.recovery_interpreter = DeterministicTaskRecoveryInterpreter()
-        date_from, date_to = booking_window()
+    def test_duplicate_booking_recovery_then_alternative_service_books(self):
+        def interact(session_id, interaction_id, event):
+            return self.post_middleware(
+                "/api/interactions",
+                interaction_body(session_id, interaction_id, event),
+            )
 
-        first = self.post_middleware(
-            "/api/interactions/message",
-            {
-                "session_id": "FULL-ALT-FIRST",
-                "message": "我想預約醫療服務",
-                "source": "text",
-            },
+        first = interact("FULL-ALT-FIRST", "FULL-INT-01", utterance("我想預約醫療服務"))
+        self.assertEqual(first["workspace"]["view"], "service_selection")
+        services_field = next(
+            record["value"] for record in first["workspace"]["fields"] if record["key"] == "services"
         )
-        physical_therapy = next(
-            service for service in first["data"]["services"] if service["id"] == "SERVICE-PT-001"
-        )
+        physical_therapy = next(item for item in services_field if item["id"] == "SERVICE-PT-001")
         self.assertEqual(physical_therapy["name"], "物理治療")
-        first_search = self.post_middleware(
-            "/api/interactions/action",
-            {
-                "session_id": "FULL-ALT-FIRST",
-                "action": "search_slots",
-                "payload": {
-                    "service_id": "SERVICE-PT-001",
-                    "date_from": date_from,
-                    "date_to": date_to,
-                },
-            },
-        )
-        first_selected = self.post_middleware(
-            "/api/interactions/action",
-            {
-                "session_id": "FULL-ALT-FIRST",
-                "action": "select_slot",
-                "payload": {"slot_id": first_search["data"]["slots"][0]["id"]},
-            },
-        )
-        self.assertEqual(first_selected["task_state"], "awaiting_confirmation")
-        first_confirmed = self.post_middleware(
-            "/api/interactions/action",
-            {
-                "session_id": "FULL-ALT-FIRST",
-                "action": "confirm",
-                "payload": {"referring_appointment_id": "APT-REF-1"},
-            },
-        )
-        self.assertEqual(first_confirmed["task_state"], "completed")
 
-        second = self.post_middleware(
-            "/api/interactions/message",
-            {
-                "session_id": "FULL-ALT-SECOND",
-                "message": "我想預約醫療服務",
-                "source": "text",
-            },
+        first_slots = interact(
+            "FULL-ALT-FIRST", "FULL-INT-02", action_event(first, service_id="SERVICE-PT-001"),
         )
-        second_search = self.post_middleware(
-            "/api/interactions/action",
-            {
-                "session_id": "FULL-ALT-SECOND",
-                "action": "search_slots",
-                "payload": {
-                    "service_id": "SERVICE-PT-001",
-                    "date_from": date_from,
-                    "date_to": date_to,
-                },
-            },
+        first_confirmation = interact("FULL-ALT-FIRST", "FULL-INT-03", action_event(first_slots))
+        first_confirmed = interact(
+            "FULL-ALT-FIRST", "FULL-INT-04", action_event(first_confirmation, decision="approve"),
         )
-        second_selected = self.post_middleware(
-            "/api/interactions/action",
-            {
-                "session_id": "FULL-ALT-SECOND",
-                "action": "select_slot",
-                "payload": {"slot_id": second_search["data"]["slots"][0]["id"]},
-            },
-        )
-        failed = self.post_middleware(
-            "/api/interactions/action",
-            {
-                "session_id": "FULL-ALT-SECOND",
-                "action": "confirm",
-                "payload": {"referring_appointment_id": "APT-REF-1"},
-            },
-        )
+        self.assertEqual(first_confirmed["task"]["status"], "completed")
+        self.assertEqual(first_confirmed["workspace"]["view"], "appointment_completed")
 
-        self.assertEqual(second_selected["task_state"], "awaiting_confirmation")
-        self.assertEqual(failed["recovery"]["reason_code"], "DUPLICATE_BOOKING")
-        picker = next(
-            action for action in failed["actions"]
-            if action["kind"] == "select_service"
+        second = interact("FULL-ALT-SECOND", "FULL-INT-05", utterance("我想預約醫療服務"))
+        second_slots = interact(
+            "FULL-ALT-SECOND", "FULL-INT-06", action_event(second, service_id="SERVICE-PT-001"),
         )
-        self.assertEqual(picker["payload"], {})
+        second_confirmation = interact("FULL-ALT-SECOND", "FULL-INT-07", action_event(second_slots))
+        failed = interact(
+            "FULL-ALT-SECOND", "FULL-INT-08", action_event(second_confirmation, decision="approve"),
+        )
+        self.assertEqual(failed["task"]["status"], "awaiting_input")
+        self.assertEqual(failed["workspace"]["view"], "appointment_recovery")
+        self.assertEqual(failed["recovery"]["reason"], "duplicate_booking")
+        self.assertIsNone(failed["receipt"])
 
-        reopened = self.post_middleware(
-            "/api/interactions/action",
-            {
-                "session_id": "FULL-ALT-SECOND",
-                "action": "select_service",
-                "payload": {},
-            },
-        )
-        self.assertEqual(reopened["task_state"], "selecting_service")
-        self.assertEqual(
-            {service["id"] for service in reopened["data"]["services"]},
-            {"SERVICE-PT-001", "SERVICE-US-001", "SERVICE-ECHO-001"},
-        )
+        cancelled = interact("FULL-ALT-SECOND", "FULL-INT-09", recovery_event(failed, "cancel"))
+        self.assertEqual(cancelled["task"]["status"], "cancelled")
+        self.assertIsNone(cancelled["receipt"])
 
-        continued = self.post_middleware(
-            "/api/interactions/action",
-            {
-                "session_id": "FULL-ALT-SECOND",
-                "action": "search_slots",
-                "payload": {
-                    "service_id": "SERVICE-US-001",
-                    "date_from": date_from,
-                    "date_to": date_to,
-                },
-            },
+        reopened = interact("FULL-ALT-SECOND", "FULL-INT-10", utterance("我想預約醫療服務"))
+        self.assertEqual(reopened["workspace"]["view"], "service_selection")
+        continued = interact(
+            "FULL-ALT-SECOND", "FULL-INT-11", action_event(reopened, service_id="SERVICE-US-001"),
         )
-        self.assertEqual(continued["task_state"], "selecting_slot")
-        self.assertEqual(continued["data"]["service_id"], "SERVICE-US-001")
-        self.assertEqual(continued["data"]["slots"][0]["service_id"], "SERVICE-US-001")
-
-        us_selected = self.post_middleware(
-            "/api/interactions/action",
-            {
-                "session_id": "FULL-ALT-SECOND",
-                "action": "select_slot",
-                "payload": {"slot_id": continued["data"]["slots"][0]["id"]},
-            },
+        self.assertEqual(continued["workspace"]["view"], "slot_selection")
+        us_confirmation = interact("FULL-ALT-SECOND", "FULL-INT-12", action_event(continued))
+        us_confirmed = interact(
+            "FULL-ALT-SECOND", "FULL-INT-13", action_event(us_confirmation, decision="approve"),
         )
-        us_confirmed = self.post_middleware(
-            "/api/interactions/action",
-            {
-                "session_id": "FULL-ALT-SECOND",
-                "action": "confirm",
-                "payload": {"referring_appointment_id": "APT-REF-1"},
-            },
-        )
-        self.assertEqual(us_selected["task_state"], "awaiting_confirmation")
-        self.assertEqual(us_confirmed["task_state"], "completed")
-        create_event = [
-            event for event in us_confirmed["tool_events"]
-            if event["tool_name"] == "medical.create_appointment"
-        ][-1]
-        self.assertTrue(create_event["ok"])
-        self.assertEqual(create_event["arguments"]["input"]["service_id"], "SERVICE-US-001")
+        self.assertEqual(us_confirmed["task"]["status"], "completed")
+        self.assertEqual(us_confirmed["workspace"]["view"], "appointment_completed")
+        self.assertTrue(us_confirmed["receipt"]["receipt_id"].startswith("MED-APT-"))
 
     def test_natural_language_activity_search_reaches_backend(self):
         response = self.post_middleware(

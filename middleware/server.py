@@ -24,6 +24,7 @@ from .execution import ExecutionPipeline, McpExecutionStage
 from .intent import IntentRecognizer
 from .interaction_contracts import EventEnvelope
 from .interaction_core import InteractionCore
+from .medical_workflow import MedicalWorkflow
 from .interaction_delivery import DeliveryOrchestrator
 from .interaction_voice import CoreVoiceTurnProvider
 from .mcp_client import McpStdioClient
@@ -87,14 +88,16 @@ class MiddlewareApplication:
             McpExecutionStage(self.registry, self.mcp_client),
         ])
         self.sessions = SessionStore()
-        self.interaction_core = InteractionCore(
+        self.medical_workflow = MedicalWorkflow(
             self.pipeline,
-            self.sessions,
             patient_id,
             authorization,
             mock_user_id=mock_user_id,
+        )
+        self.interaction_core = InteractionCore(
+            self.sessions,
+            self.medical_workflow,
             intent_recognizer=intent_recognizer,
-            registry=self.registry,
         )
         self.delivery_orchestrator = DeliveryOrchestrator()
         self.voice_turn_provider = voice_turn_provider or UnavailableVoiceTurnProvider()
