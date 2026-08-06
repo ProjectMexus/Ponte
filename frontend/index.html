@@ -58,7 +58,11 @@
       <section class="artifact-sheet">
         <header class="artifact-header">
           <div><p class="exception-kicker">Action receipt</p><h2 id="artifact-heading">Ponte</h2></div>
-          <button type="button" class="artifact-close" data-artifact-close aria-label="Close receipt">×</button>
+          <div class="artifact-actions">
+            <button type="button" id="artifact-print" class="artifact-action-button" aria-label="Print receipt">列印</button>
+            <button type="button" id="artifact-download" class="artifact-action-button" aria-label="Download receipt">下載</button>
+            <button type="button" class="artifact-close" data-artifact-close aria-label="Close receipt">×</button>
+          </div>
         </header>
         <div id="artifact-content" class="artifact-content"></div>
       </section>
