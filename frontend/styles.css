@@ -101,8 +101,11 @@ body[data-voice-state="error"] .voice-status-label, body[data-voice-state="audio
 .workspace-view { display: none; }
 .workspace-fields { display: grid; gap: 8px; margin: 0 0 16px; padding: 0; }
 .workspace-field { display: flex; justify-content: space-between; gap: 18px; padding: 13px 15px; border: 1px solid rgba(95, 121, 213, .11); border-radius: 13px; background: rgba(255, 255, 255, .48); font-size: .8rem; }
-.workspace-field dt { color: var(--muted); }
-.workspace-field dd { max-width: 66%; margin: 0; font-weight: 750; text-align: right; }
+.workspace-field dt, .workspace-field-label { color: var(--muted); }
+.workspace-field dd, .workspace-field-value { max-width: 66%; margin: 0; font-weight: 750; text-align: right; }
+.workspace-field-action { cursor: pointer; width: 100%; text-align: left; font: inherit; color: var(--ink); transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease; }
+.workspace-field-action:hover { border-color: rgba(10, 132, 255, .56); background: rgba(219, 234, 254, .7); box-shadow: 0 8px 20px rgba(10, 132, 255, .1); transform: translateY(-1px); }
+.workspace-field-action:focus-visible { outline: 3px solid rgba(10, 132, 255, .48); outline-offset: 2px; }
 .workspace-artifact { margin: 16px 0 0; color: var(--muted); font-size: .72rem; font-weight: 700; }
 .action-list { display: flex; flex-wrap: wrap; gap: 9px; }
 .action-button { min-height: 54px; padding: 12px 18px; border: 1px solid rgba(60, 60, 67, .18); border-radius: 13px; color: var(--ink); background: rgba(255, 255, 255, .64); font-size: .8rem; font-weight: 700; text-align: left; transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease; }

@@ -214,8 +214,11 @@ def _view_for(result: CanonicalInteractionResult) -> str:
     return "appointment_list"
 
 
-def _field(key: str, label: str, value: Any) -> dict[str, Any]:
-    return {"key": key, "label": label, "value": deepcopy(value)}
+def _field(key: str, label: str, value: Any, action: dict[str, Any] | None = None) -> dict[str, Any]:
+    field = {"key": key, "label": label, "value": deepcopy(value)}
+    if action is not None:
+        field["action"] = deepcopy(action)
+    return field
 
 
 def _selection_records(value: Any) -> list[Any]:
@@ -274,7 +277,7 @@ def _appointment_list_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
     return fields
 
 
-def _service_selection_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _service_selection_fields(facts: Mapping[str, Any], task_id: str) -> list[dict[str, Any]]:
     """Generate one field per service with human-readable label and value."""
     fields: list[dict[str, Any]] = []
     for i, svc in enumerate(_as_list(facts.get("services"))):
@@ -286,11 +289,22 @@ def _service_selection_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
         duration_text = f"{duration} 分鐘" if duration else ""
         # Build value string (department_id is just an ID, not a displayable object)
         value = duration_text
-        fields.append(_field(f"service_{i}", name, value))
+        # Generate action event for clickable row
+        action = {
+            "event": {
+                "type": "service_selected",
+                "action_id": f"ACT-{task_id}-SVC-{i}",
+                "task_id": task_id,
+                "service_id": svc.get("id", ""),
+                "date_from": facts.get("date_from", ""),
+                "date_to": facts.get("date_to", ""),
+            }
+        }
+        fields.append(_field(f"service_{i}", name, value, action=action))
     return fields
 
 
-def _slot_selection_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _slot_selection_fields(facts: Mapping[str, Any], task_id: str) -> list[dict[str, Any]]:
     """Generate one field per slot with human-readable label and value."""
     fields: list[dict[str, Any]] = []
     for i, slot in enumerate(_as_list(facts.get("slots"))):
@@ -323,7 +337,16 @@ def _slot_selection_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
         # Build value string
         value_parts = [service_name, location_name, remaining_text]
         value = " · ".join(filter(None, value_parts))
-        fields.append(_field(f"slot_{i}", label, value))
+        # Generate action event for clickable row
+        action = {
+            "event": {
+                "type": "slot_selected",
+                "action_id": f"ACT-{task_id}-SLOT-{i}",
+                "task_id": task_id,
+                "slot_id": slot.get("id", ""),
+            }
+        }
+        fields.append(_field(f"slot_{i}", label, value, action=action))
     return fields
 
 
@@ -355,6 +378,8 @@ def _cash_summary_fields(facts: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 def _fields_for(result: CanonicalInteractionResult, view: str) -> list[dict[str, Any]]:
     facts = _facts(result)
+    task = _task(result)
+    task_id = task.get("task_id", "")
     if view == "cash_sharing_summary":
         return _cash_summary_fields(facts)
     if view == "cash_sharing_recovery":
@@ -367,9 +392,9 @@ def _fields_for(result: CanonicalInteractionResult, view: str) -> list[dict[str,
     if view == "appointment_list":
         return _appointment_list_fields(facts)
     if view == "service_selection":
-        return _service_selection_fields(facts)
+        return _service_selection_fields(facts, task_id)
     if view == "slot_selection":
-        return _slot_selection_fields(facts)
+        return _slot_selection_fields(facts, task_id)
     if view == "appointment_confirmation":
         fields = _appointment_fields(result)
         confirmation = _as_mapping(result.confirmation)
