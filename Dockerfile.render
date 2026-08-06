@@ -5,10 +5,11 @@ FROM python:3.13-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Install nginx
+# Install nginx and remove default site
 RUN apt-get update && \
     apt-get install -y --no-install-recommends nginx && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    rm -f /etc/nginx/sites-enabled/default
 
 WORKDIR /app
 
