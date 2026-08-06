@@ -156,6 +156,36 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 410)
         self.assertEqual(json.loads(raised.exception.read())["error"]["code"], "INTERACTION_EVENT_REQUIRED")
 
+    def test_legacy_message_route_rejects_medical_workflow(self):
+        calls_before = len(self.mcp_client.calls)
+        with self.assertRaises(HTTPError) as raised:
+            self.request("POST", "/api/interactions/message", {
+                "session_id": "S-LEGACY-MED",
+                "message": "我想預約醫療服務",
+                "source": "text",
+            })
+        self.assertEqual(raised.exception.code, 400)
+        self.assertEqual(
+            json.loads(raised.exception.read())["error"]["code"],
+            "INTERACTION_EVENT_REQUIRED",
+        )
+        self.assertEqual(len(self.mcp_client.calls), calls_before)
+
+    def test_legacy_action_route_rejects_medical_actions(self):
+        calls_before = len(self.mcp_client.calls)
+        with self.assertRaises(HTTPError) as raised:
+            self.request("POST", "/api/interactions/action", {
+                "session_id": "S-LEGACY-MED",
+                "action": "search_slots",
+                "payload": {"service_id": "SERVICE-US-001", "date_from": "2026-08-10", "date_to": "2026-08-14"},
+            })
+        self.assertEqual(raised.exception.code, 400)
+        self.assertEqual(
+            json.loads(raised.exception.read())["error"]["code"],
+            "INTERACTION_EVENT_REQUIRED",
+        )
+        self.assertEqual(len(self.mcp_client.calls), calls_before)
+
 
 if __name__ == "__main__":
     unittest.main()

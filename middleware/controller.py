@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 from copy import deepcopy
 from collections.abc import Mapping
-from datetime import datetime, timezone
 from typing import Any
 
 from MCP.registry import ToolRegistry, build_registry
@@ -17,24 +16,33 @@ from .diagnostics import (
     diagnostic_requires_confirmation,
 )
 from .execution import ExecutionPipeline
-from .intent import IntentRecognizer, KeywordIntentRecognizer, build_intent_recognizer
+from .intent import IntentRecognizer, build_intent_recognizer
 from .session import SessionState, SessionStore, build_response
 from .task_manager.interpreter import DeterministicTaskRecoveryInterpreter, TaskRecoveryInterpreter
 from .task_manager.manager import TaskManager
-from .task_manager.recovery import build_recovery_plan
 
 
 _ACTION_NAMES = frozenset({
+    "confirm_tool",
+    "cancel",
+})
+_RETIRED_MEDICAL_ACTIONS = frozenset({
     "select_service",
     "search_slots",
     "select_slot",
     "confirm",
-    "confirm_tool",
-    "cancel",
     "retry",
     "human_help",
 })
-_MISSING = object()
+
+
+class LegacyInteractionContractError(ValueError):
+    """A legacy interaction route received a request owned by the canonical event contract."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
 
 
 class InteractionController:
@@ -74,70 +82,20 @@ class InteractionController:
         intent = self.intent_recognizer.recognize(request.message)
         state.data["intent"] = intent.intent
         state.data["intent_source"] = intent.source
+        if intent.is_medical:
+            raise LegacyInteractionContractError(
+                "INTERACTION_EVENT_REQUIRED",
+                "醫療預約已改用 /api/interactions 事件合約，legacy 文字路徑不再執行醫療工具。",
+            )
         if intent.is_cash_sharing:
             return self._handle_cash_sharing(state)
         if intent.is_elderly_activity:
             return self._handle_elderly_activity(state)
-        if intent.is_medical_query:
-            return self._handle_medical_query(state)
-        if intent.is_medical_booking:
-            return self._handle_medical_booking(state)
-        if not intent.is_medical:
-            self._task_manager(state).transition("idle", "welcome")
-            return build_response(
-                state,
-                "我可以協助查詢醫療預約、可預約服務和時段。請告訴我你想辦理的事項。",
-                [{"action": "human_help", "label": "轉接人工協助"}],
-            )
-
-    def _handle_medical_query(self, state: SessionState) -> dict[str, Any]:
-        manager = self._task_manager(state)
-        manager.transition("querying", "load_appointments")
-        appointments_result = self._run_tool(
-            state,
-            "medical.get_my_appointments",
-            "load_appointments",
-            {},
-        )
-        appointments = self._result_data(state, appointments_result, "load_appointments")
-        if appointments is None:
-            return build_response(state, "暫時無法查詢你的醫療預約，請稍後再試。", [])
-        state.data["appointments"] = appointments
-        manager.complete("load_appointments")
-        state.confirmation_record = None
-        return build_response(state, "我已查到你目前的醫療預約。", [])
-
-    def _handle_medical_booking(self, state: SessionState) -> dict[str, Any]:
-        manager = self._task_manager(state)
-        manager.transition("querying", "load_appointments")
-        appointments_result = self._run_tool(
-            state,
-            "medical.get_my_appointments",
-            "load_appointments",
-            {},
-        )
-        appointments = self._result_data(state, appointments_result, "load_appointments")
-        if appointments is None:
-            return build_response(state, "暫時無法查詢你的醫療預約，請稍後再試。", [])
-        state.data["appointments"] = appointments
-
-        manager.transition("querying", "load_services")
-        services_result = self._run_tool(
-            state,
-            "medical.list_appointment_services",
-            "load_services",
-            {},
-        )
-        services = self._result_data(state, services_result, "load_services")
-        if services is None:
-            return build_response(state, "暫時無法載入可預約服務，請稍後再試。", [])
-        state.data["services"] = services
-        manager.transition("selecting_service", "select_service")
-        state.confirmation_record = None
+        self._task_manager(state).transition("idle", "welcome")
         return build_response(
             state,
-            "我已查到你的預約和可預約服務，請選擇你想預約的服務。",
-            [{"action": "search_slots", "label": "搜尋可預約時段"}],
+            "我可以協助查詢醫療預約、可預約服務和時段。請告訴我你想辦理的事項。",
+            [{"action": "human_help", "label": "轉接人工協助"}],
         )
 
     def _handle_cash_sharing(self, state: SessionState) -> dict[str, Any]:
@@ -175,33 +133,24 @@ class InteractionController:
     def handle_action(self, request: InteractionActionRequest) -> dict[str, Any]:
         if not isinstance(request, InteractionActionRequest):
             raise ValueError("request must be an InteractionActionRequest")
+        if request.action in _RETIRED_MEDICAL_ACTIONS:
+            raise LegacyInteractionContractError(
+                "INTERACTION_EVENT_REQUIRED",
+                "醫療 action 已改用 /api/interactions 事件合約，legacy action 路徑不再執行醫療工具。",
+            )
         if request.action not in _ACTION_NAMES:
             raise ValueError(f"Unknown interaction action: {request.action}")
 
         state = self.sessions.get_or_create(request.session_id)
         self._task_manager(state).start_action()
-        action = request.action
-        if action == "confirm_tool":
+        if request.action == "confirm_tool":
             return self._confirm_diagnostic(state)
-        if action == "select_service":
-            return self._select_service(state)
-        if action == "search_slots":
-            return self._search_slots(state, request.payload)
-        if action == "select_slot":
-            return self._select_slot(state, request.payload)
-        if action == "confirm":
-            return self._confirm(state, request.payload)
-        if action == "cancel":
-            if state.data.get("pending_diagnostic") is not None:
-                return self._cancel_diagnostic(state)
-            self._task_manager(state).cancel("cancel")
-            state.confirmation_record = None
-            return build_response(state, "已取消這次預約協助。", [])
-        if action == "retry":
-            return self._retry(state)
-
-        self._task_manager(state).human_handoff()
-        return build_response(state, "我會為你轉接人工協助。", [])
+        if state.data.get("pending_diagnostic") is not None:
+            return self._cancel_diagnostic(state)
+        raise LegacyInteractionContractError(
+            "INTERACTION_EVENT_REQUIRED",
+            "legacy cancel 只適用於 MCP 診斷確認；醫療預約請改用 /api/interactions 事件合約。",
+        )
 
     def _task_manager(self, state: SessionState) -> TaskManager:
         return TaskManager(state, self.recovery_interpreter)
@@ -290,217 +239,6 @@ class InteractionController:
         response["mode"] = "mcp_diagnostic"
         return response
 
-    def _select_service(self, state: SessionState) -> dict[str, Any]:
-        for key in (
-            "service_id",
-            "date_from",
-            "date_to",
-            "slots",
-            "slot_id",
-            "selected_slot",
-            "task_id",
-            "task_status",
-        ):
-            state.data.pop(key, None)
-        state.confirmation_record = None
-
-        manager = self._task_manager(state)
-        manager.transition("querying", "load_services")
-        services_result = self._run_tool(
-            state,
-            "medical.list_appointment_services",
-            "load_services",
-            {},
-        )
-        services = self._result_data(state, services_result, "load_services")
-        if services is None:
-            return build_response(state, "暫時無法載入可預約服務，請稍後再試。", [])
-
-        state.data["services"] = services
-        manager.transition("selecting_service", "select_service")
-        return build_response(
-            state,
-            "請重新選擇你想預約的服務或科室。",
-            [{"action": "cancel", "label": "取消這次預約"}],
-        )
-
-    def _search_slots(self, state: SessionState, payload: Mapping[str, Any]) -> dict[str, Any]:
-        service_id = _payload_string(payload, "service_id")
-        date_from = _payload_string(payload, "date_from")
-        date_to = _payload_string(payload, "date_to")
-        input_data: dict[str, Any] = {
-            "service_id": service_id,
-            "date_from": date_from,
-            "date_to": date_to,
-        }
-        for key in ("doctor_id", "location_id"):
-            if key in payload and payload[key] is not None:
-                input_data[key] = _payload_string(payload, key)
-
-        state.data.update({"service_id": service_id, "date_from": date_from, "date_to": date_to})
-        manager = self._task_manager(state)
-        manager.transition("querying", "search_slots")
-        result = self._run_tool(state, "medical.search_appointment_slots", "search_slots", input_data)
-        slots = self._result_data(state, result, "search_slots")
-        if slots is None:
-            return build_response(state, "暫時無法查詢可預約時段，請稍後再試。", [])
-        state.data["slots"] = slots
-        if not slots:
-            plan = build_recovery_plan(
-                error=None,
-                step_id="search_slots",
-                workflow=str(state.data.get("intent", "medical_booking")),
-                data={
-                    "service_id": service_id,
-                    "date_from": date_from,
-                    "date_to": date_to,
-                },
-                result_data=slots,
-                retryable=False,
-            )
-            if plan is not None:
-                manager.request_user_input(plan)
-            return build_response(state, "目前選擇的服務和日期範圍沒有可預約名額。", [])
-        manager.transition("selecting_slot", "select_slot")
-        return build_response(state, "請選擇一個可預約時段。", [{"action": "select_slot", "label": "選擇時段"}])
-
-    def _select_slot(self, state: SessionState, payload: Mapping[str, Any]) -> dict[str, Any]:
-        slot_id = _payload_string(payload, "slot_id")
-        if not state.data.get("service_id"):
-            raise ValueError("service_id must be selected before slot_id")
-        selected_slot: Any = {"id": slot_id}
-        slots = state.data.get("slots")
-        if isinstance(slots, list):
-            for slot in slots:
-                if isinstance(slot, Mapping) and slot.get("id") == slot_id:
-                    selected_slot = deepcopy(dict(slot))
-                    break
-        state.data["slot_id"] = slot_id
-        state.data["selected_slot"] = selected_slot
-        self._task_manager(state).transition("awaiting_confirmation", "confirm_appointment")
-        return build_response(
-            state,
-            "請確認這個時段後再提交預約。",
-            [{"action": "confirm", "label": "確認預約"}, {"action": "cancel", "label": "取消"}],
-        )
-
-    def _confirm(self, state: SessionState, payload: Mapping[str, Any]) -> dict[str, Any]:
-        if state.task_state != "awaiting_confirmation":
-            raise ValueError("confirm requires a selected slot awaiting confirmation")
-        service_id = state.data.get("service_id")
-        slot_id = state.data.get("slot_id")
-        if not isinstance(service_id, str) or not service_id or not isinstance(slot_id, str) or not slot_id:
-            raise ValueError("confirm requires a stored selected slot")
-
-        input_data: dict[str, Any] = {
-            "patient_id": self.patient_id,
-            "service_id": service_id,
-            "slot_id": slot_id,
-            "consent": True,
-        }
-        for key in ("referring_appointment_id", "administrative_note"):
-            if key in payload and payload[key] is not None:
-                input_data[key] = _payload_string(payload, key)
-
-        state.confirmation_record = {
-            "step_id": "confirm_appointment",
-            "displayed_data": deepcopy(state.data.get("selected_slot", {"id": slot_id})),
-            "decision": "confirmed",
-            "confirmed_at": datetime.now(timezone.utc).isoformat(),
-        }
-        manager = self._task_manager(state)
-        manager.transition("submitting", "create_appointment")
-        create_result = self._run_tool(
-            state,
-            "medical.create_appointment",
-            "create_appointment",
-            input_data,
-            safe_for_retry=False,
-            include_idempotency=True,
-        )
-        if not create_result.ok:
-            return build_response(
-                state,
-                _recovery_message(state, "預約提交未成功，請稍後再試。"),
-                [],
-            )
-        task_id = self._task_id(create_result)
-        if task_id is None:
-            self._set_error(
-                state,
-                "create_appointment",
-                "BACKEND_INVALID_RESPONSE",
-                "預約服務回覆缺少任務編號。",
-            )
-            return build_response(state, "預約服務回覆格式不完整，請稍後再試。", [])
-
-        state.data["task_id"] = task_id
-        manager.transition("submitted", "get_task_status")
-        status_result = self._run_tool(
-            state,
-            "medical.get_task_status",
-            "get_task_status",
-            {"task_id": task_id},
-        )
-        status_data = self._result_data(state, status_result, "get_task_status")
-        if status_data is None or not isinstance(status_data, Mapping):
-            return build_response(
-                state,
-                _recovery_message(state, "預約任務狀態暫時無法確認，請稍後再試。"),
-                [],
-            )
-        status = status_data.get("status")
-        if not isinstance(status, str) or not status:
-            self._set_error(
-                state,
-                "get_task_status",
-                "BACKEND_INVALID_RESPONSE",
-                "任務狀態回覆缺少狀態欄位。",
-            )
-            return build_response(state, "預約任務回覆格式不完整，請稍後再試。", [])
-        state.data["task_status"] = status
-        manager.transition(_task_state(status), "get_task_status")
-        return build_response(state, "預約已提交，我已取得最新任務狀態。", [])
-
-    def _retry(self, state: SessionState) -> dict[str, Any]:
-        call = state.last_tool_call
-        if call is None:
-            return build_response(state, "目前沒有可重試的查詢。", [])
-        manager = self._task_manager(state)
-        manager.transition("querying", call.step_id)
-        result = self._run_tool(
-            state,
-            call.name,
-            call.step_id,
-            call.arguments.get("input", {}),
-        )
-        if result.ok:
-            data = self._result_data(state, result, call.step_id)
-            if data is not None:
-                state.data["last_retry_data"] = data
-                if call.name == "medical.search_appointment_slots":
-                    state.data["slots"] = data
-                    if data:
-                        manager.transition("selecting_slot", "select_slot")
-                    else:
-                        plan = build_recovery_plan(
-                            error=None,
-                            step_id=call.step_id,
-                            workflow=str(state.data.get("intent", "medical_booking")),
-                            data=state.data,
-                            result_data=data,
-                            retryable=False,
-                        )
-                        if plan is not None:
-                            manager.request_user_input(plan)
-                else:
-                    manager.transition("querying", call.step_id)
-        return build_response(
-            state,
-            "已重試上一個查詢。" if result.ok else _recovery_message(state, "重試查詢仍未成功，請稍後再試。"),
-            [],
-        )
-
     def _run_tool(
         self,
         state: SessionState,
@@ -571,19 +309,6 @@ class InteractionController:
             return None
         return deepcopy(value)
 
-    @staticmethod
-    def _task_id(result: ToolExecutionResult) -> str | None:
-        payload = result.data
-        if not isinstance(payload, Mapping):
-            return None
-        data = payload.get("data")
-        if isinstance(data, Mapping) and isinstance(data.get("task_id"), str) and data["task_id"]:
-            return data["task_id"]
-        task = payload.get("task")
-        if isinstance(task, Mapping) and isinstance(task.get("id"), str) and task["id"]:
-            return task["id"]
-        return None
-
     def _set_error(
         self,
         state: SessionState,
@@ -611,18 +336,6 @@ def _required_string(value: Any, field_name: str) -> str:
     return value.strip()
 
 
-def _payload_string(payload: Mapping[str, Any], field_name: str) -> str:
-    if field_name not in payload:
-        raise ValueError(f"Missing required action field: {field_name}")
-    return _required_string(payload[field_name], field_name)
-
-
-def _is_medical_intent(message: str) -> bool:
-    """Backward-compatible deterministic helper for callers outside the controller."""
-
-    return KeywordIntentRecognizer().recognize(message).is_medical
-
-
 def _request_id() -> str:
     return f"REQ-MW-{uuid.uuid4().hex[:12].upper()}"
 
@@ -638,21 +351,3 @@ def _diagnostic_backend_response(result: ToolExecutionResult) -> dict[str, Any]:
         "request_id": result.request_id,
         "error": deepcopy(dict(result.error or {})),
     }
-
-
-def _task_state(status: str) -> str:
-    normalized = status.casefold()
-    if normalized in {"submitted", "pending", "queued", "processing"}:
-        return "submitted"
-    if normalized in {"completed", "complete", "succeeded", "success"}:
-        return "completed"
-    return normalized
-
-
-def _recovery_message(state: SessionState, fallback: str) -> str:
-    recovery = state.recovery
-    if isinstance(recovery, Mapping):
-        explanation = recovery.get("explanation")
-        if isinstance(explanation, str) and explanation.strip():
-            return explanation
-    return fallback

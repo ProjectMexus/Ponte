@@ -18,7 +18,7 @@ from ponte_logging import log_event
 
 from .contracts import InteractionActionRequest, InteractionRequest, ToolCall, ToolExecutionResult
 from .config import load_dotenv
-from .controller import InteractionController
+from .controller import InteractionController, LegacyInteractionContractError
 from .diagnostics import DiagnosticCommandError
 from .execution import ExecutionPipeline, McpExecutionStage
 from .intent import IntentRecognizer
@@ -402,6 +402,8 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
                     )
                 try:
                     return application.controller.handle_message(request)
+                except LegacyInteractionContractError as error:
+                    raise ClientRequestError(400, error.code, error.message) from error
                 except DiagnosticCommandError as error:
                     raise ClientRequestError(400, error.code, error.message) from error
             if path == "/api/interactions/action":
@@ -411,6 +413,8 @@ def _make_request_handler(application: MiddlewareApplication) -> Type[BaseHTTPRe
                     raise ClientRequestError(400, "INVALID_REQUEST", str(error)) from error
                 try:
                     return application.controller.handle_action(request)
+                except LegacyInteractionContractError as error:
+                    raise ClientRequestError(400, error.code, error.message) from error
                 except ValueError as error:
                     raise ClientRequestError(400, "INVALID_ACTION", str(error)) from error
             raise ClientRequestError(404, "NOT_FOUND", "找不到此 API 路徑。")
